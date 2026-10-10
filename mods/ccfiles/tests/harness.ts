@@ -8,9 +8,9 @@ import type { LogRecord, SessionState } from '../src/model.ts'
 import { replay } from '../src/reducer.ts'
 
 export const CWD = '/tmp/fv'
-export const TRANSCRIPT = '/home/u/.claude/projects/-tmp-fv/s1.jsonl'
-export const LOG = '/home/u/.claude/projects/-tmp-fv/s1/file-viewer/log.jsonl'
-export const MEMORY = '/home/u/.claude/projects/-tmp-fv/memory/MEMORY.md'
+export const TRANSCRIPT = '/home/u/.claude/projects/-tmp-ccfiles/s1.jsonl'
+export const LOG = '/home/u/.claude/projects/-tmp-ccfiles/s1/ccfiles/log.jsonl'
+export const MEMORY = '/home/u/.claude/projects/-tmp-ccfiles/memory/MEMORY.md'
 
 const range = (n: number, f: (i: number) => string) => Array.from({ length: n }, (_, i) => f(i + 1))
 

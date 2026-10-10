@@ -82,5 +82,5 @@ export class Store {
 /** The one line selection-as-context adds to a prompt. */
 export function selectionLine(path: string, cwd: string | null): string {
   const shown = cwd && path.startsWith(cwd.replace(/\/+$/, '') + '/') ? path.slice(cwd.replace(/\/+$/, '').length + 1) : path
-  return `The user has ${shown} selected in the File Viewer panel; "this file" or "this" may refer to it.`
+  return `The user has ${shown} selected in the ccfiles panel; "this file" or "this" may refer to it.`
 }

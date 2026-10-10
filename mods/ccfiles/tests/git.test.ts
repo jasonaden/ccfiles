@@ -13,7 +13,7 @@ import {
 } from '../src/git.ts'
 
 // Outputs captured from git 2.x in a scratch repo: modify, stage new, git mv, git rm, untracked, ignored, binary.
-const ROOT = '/tmp/fv-git-scratch'
+const ROOT = '/tmp/ccfiles-git-scratch'
 const STATUS =
   'A  added.ts\0D  gone.txt\0 M img.bin\0 M keep.txt\0RM src/new/move.ts\0src/old/move.ts\0?? sp ace.txt\0?? untracked.md\0'
 const STATUS_IGNORED = STATUS + '!! dist/out.js\0'
@@ -97,7 +97,7 @@ describe('ahead/behind, branch, first line', () => {
   })
 
   test('firstLine trims and maps empty to null', () => {
-    expect(firstLine('/tmp/fv-git-scratch\n')).toBe('/tmp/fv-git-scratch')
+    expect(firstLine('/tmp/ccfiles-git-scratch\n')).toBe('/tmp/ccfiles-git-scratch')
     expect(firstLine('0c0c1f34dee5bd07f1f4ae9cf5ee7113e2c8d8a4\n')).toBe('0c0c1f34dee5bd07f1f4ae9cf5ee7113e2c8d8a4')
     expect(firstLine('  \n')).toBe(null)
   })

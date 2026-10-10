@@ -172,6 +172,11 @@ describe('commands that read nothing', () => {
     expect(parseCommand('git add -A && git commit -qm msg && git push', CWD).git).toEqual(['add', 'commit', 'push'])
   })
 
+  test('a variable, substitution or glob is never recorded as a file name', () => {
+    for (const cmd of ['for f in a.ts b.ts; do cat "$f"; done', 'cat $(git ls-files)', 'head -5 `ls *.md`', 'cat src/*.ts', 'ls $DIR'])
+      expect(run(cmd, 'some output').filter((a) => /[$`*]/.test(a.path))).toEqual([])
+  })
+
   test('heredocs and unbalanced quotes do not throw', () => {
     expect(run("cat <<'EOF' > f.md\nhello\nEOF", '')).toEqual([])
     expect(() => run("cat 'unterminated", '')).not.toThrow()

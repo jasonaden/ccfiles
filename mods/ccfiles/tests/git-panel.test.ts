@@ -53,9 +53,9 @@ describe('git and commits', () => {
     const t = tools(on)
     await startSession($)
     const ui = await $.ui.mount({
-      plugin: 'file-viewer', surface: 'terminal', component: 'Pane', requestId: 'file-viewer',
+      plugin: 'ccfiles', surface: 'terminal', component: 'Pane', requestId: 'ccfiles',
       viewport: { columns: 160, rows: 45, isFullscreen: true },
-      props: { title: 'Files', isFocused: true, bodyColumns: 70, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+      props: { title: 'ccfiles', isFocused: true, bodyColumns: 70, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
     })
     await $.prompt.submit({ text: 'hi', wait: false } as never)
     await h.clock.settle()
@@ -117,7 +117,7 @@ describe('git and commits', () => {
   test('SessionStart asks to watch .git/index and HEAD; a FileChanged on them refreshes git', async ($, on) => {
     const h = harness(on)
     const runs = git(on, { status: '', numstat: '', aheadBehind: '', branch: 'main', head: SHA1, diffNames: '' })
-    const r = await $.classic.SessionStart({ source: 'startup', transcript_path: '/home/u/.claude/projects/-tmp-fv/s1.jsonl', cwd: CWD } as never)
+    const r = await $.classic.SessionStart({ source: 'startup', transcript_path: '/home/u/.claude/projects/-tmp-ccfiles/s1.jsonl', cwd: CWD } as never)
     expect(r.watchPaths).toEqual([`${CWD}/.git/index`, `${CWD}/.git/HEAD`])
     await $.classic.FileChanged({ file_path: `${CWD}/.git/index`, event: 'change' } as never)
     await h.clock.settle()

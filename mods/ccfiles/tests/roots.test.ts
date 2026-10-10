@@ -78,11 +78,11 @@ describe('git root lookups', () => {
     expect(gitDirsToResolve(['/tmp/plain/a.txt'], ctx({ git: { '/tmp/plain': null } }))).toEqual([])
   })
   test('the argv asks for the top level and the directory\'s prefix inside it', () => {
-    expect(revParseArgv('/tmp/fv-other/src')).toEqual(['git', '-C', '/tmp/fv-other/src', 'rev-parse', '--show-toplevel', '--show-prefix'])
+    expect(revParseArgv('/tmp/ccfiles-other/src')).toEqual(['git', '-C', '/tmp/ccfiles-other/src', 'rev-parse', '--show-toplevel', '--show-prefix'])
   })
   test('the answer keeps the session\'s spelling of a symlinked path (/tmp vs /private/tmp)', () => {
-    expect(parseRevParse('/tmp/fv-other/src', { exitCode: 0, stdout: '/private/tmp/fv-other\nsrc/\n' })).toBe('/tmp/fv-other')
-    expect(parseRevParse('/tmp/fv-other', { exitCode: 0, stdout: '/private/tmp/fv-other\n\n' })).toBe('/tmp/fv-other')
+    expect(parseRevParse('/tmp/ccfiles-other/src', { exitCode: 0, stdout: '/private/tmp/ccfiles-other\nsrc/\n' })).toBe('/tmp/ccfiles-other')
+    expect(parseRevParse('/tmp/ccfiles-other', { exitCode: 0, stdout: '/private/tmp/ccfiles-other\n\n' })).toBe('/tmp/ccfiles-other')
   })
   test('a failed run or no output means not a repo', () => {
     expect(parseRevParse('/tmp/x', { exitCode: 128, stdout: '' })).toBeNull()
@@ -90,18 +90,18 @@ describe('git root lookups', () => {
     expect(parseRevParse('/tmp/x', { exitCode: 0, stdout: '' })).toBeNull()
   })
   test('a parsed answer feeds resolveRoot as the git step', () => {
-    const top = parseRevParse('/tmp/fv-other/src', { exitCode: 0, stdout: '/private/tmp/fv-other\nsrc/\n' })
-    expect(resolveRoot('/tmp/fv-other/src/x.ts', ctx({ git: { '/tmp/fv-other/src': top } }))?.root).toBe('/tmp/fv-other')
+    const top = parseRevParse('/tmp/ccfiles-other/src', { exitCode: 0, stdout: '/private/tmp/ccfiles-other\nsrc/\n' })
+    expect(resolveRoot('/tmp/ccfiles-other/src/x.ts', ctx({ git: { '/tmp/ccfiles-other/src': top } }))?.root).toBe('/tmp/ccfiles-other')
   })
 })
 
 describe('sections', () => {
   test('the session root first, then outside roots in order of first touch, each with its files', () => {
-    const c = ctx({ git: { '/tmp/fv-other/src': '/tmp/fv-other', [`${HOME}/Projects/lib`]: `${HOME}/Projects/lib` } })
-    const out = sections(['/tmp/fv-other/src/x.ts', `${SESSION}/a.ts`, `${HOME}/Projects/lib/b.ts`, '/tmp/fv-other/src/y.ts', `${SESSION}/b.ts`], c)
+    const c = ctx({ git: { '/tmp/ccfiles-other/src': '/tmp/ccfiles-other', [`${HOME}/Projects/lib`]: `${HOME}/Projects/lib` } })
+    const out = sections(['/tmp/ccfiles-other/src/x.ts', `${SESSION}/a.ts`, `${HOME}/Projects/lib/b.ts`, '/tmp/ccfiles-other/src/y.ts', `${SESSION}/b.ts`], c)
     expect(out).toEqual([
       { root: SESSION, via: 'session', files: [`${SESSION}/a.ts`, `${SESSION}/b.ts`] },
-      { root: '/tmp/fv-other', via: 'git', files: ['/tmp/fv-other/src/x.ts', '/tmp/fv-other/src/y.ts'] },
+      { root: '/tmp/ccfiles-other', via: 'git', files: ['/tmp/ccfiles-other/src/x.ts', '/tmp/ccfiles-other/src/y.ts'] },
       { root: `${HOME}/Projects/lib`, via: 'git', files: [`${HOME}/Projects/lib/b.ts`] },
     ])
   })
@@ -129,7 +129,7 @@ describe('labels', () => {
   test('home-shortened under ~, unchanged elsewhere', () => {
     expect(homeShort(`${HOME}/Projects/other-repo`, HOME)).toBe('~/Projects/other-repo')
     expect(homeShort(HOME, HOME)).toBe('~')
-    expect(homeShort('/tmp/fv-other', HOME)).toBe('/tmp/fv-other')
+    expect(homeShort('/tmp/ccfiles-other', HOME)).toBe('/tmp/ccfiles-other')
     expect(homeShort('/Users/jx/a', HOME)).toBe('/Users/jx/a')
   })
   test('a section label is middle-truncated to the width, keeping both ends', () => {
@@ -138,7 +138,7 @@ describe('labels', () => {
     expect(label.startsWith('~/Pro')).toBe(true)
     expect(label.endsWith('name')).toBe(true)
     expect(label).toContain('…')
-    expect(sectionLabel('/tmp/fv-other', HOME, 40)).toBe('/tmp/fv-other')
+    expect(sectionLabel('/tmp/ccfiles-other', HOME, 40)).toBe('/tmp/ccfiles-other')
   })
 })
 
@@ -154,7 +154,7 @@ describe('focus helpers', () => {
     expect(breadcrumb(SESSION, SESSION, HOME)).toEqual(['acme-web-app'])
   })
   test('breadcrumb in an outside section starts with its home-shortened root', () => {
-    expect(breadcrumb('/tmp/fv-other/src', SESSION, HOME, ['/tmp/fv-other'])).toEqual(['/tmp/fv-other', 'src'])
+    expect(breadcrumb('/tmp/ccfiles-other/src', SESSION, HOME, ['/tmp/ccfiles-other'])).toEqual(['/tmp/ccfiles-other', 'src'])
     expect(breadcrumb(`${HOME}/Projects/lib`, SESSION, HOME, [`${HOME}/Projects/lib`])).toEqual(['~/Projects/lib'])
   })
   test('breadcrumb above the session root is the path itself', () => {
@@ -202,7 +202,7 @@ describe('permissions.additionalDirectories from settings files', () => {
 describe('the repo a section or focus shows', () => {
   const git = (answers: Record<string, string | null>) => (dir: string) => (dir in answers ? answers[dir] : undefined)
   test('a git-rooted section is its own repo; marker and parent roots are none', () => {
-    expect(sectionRepo({ root: '/tmp/fv-other', via: 'git' }, git({}))).toBe('/tmp/fv-other')
+    expect(sectionRepo({ root: '/tmp/ccfiles-other', via: 'git' }, git({}))).toBe('/tmp/ccfiles-other')
     expect(sectionRepo({ root: '/work/m', via: 'marker' }, git({}))).toBe(null)
     expect(sectionRepo({ root: '/work/p', via: 'parent' }, git({}))).toBe(null)
   })
@@ -212,8 +212,8 @@ describe('the repo a section or focus shows', () => {
     expect(sectionRepo({ root: '/work/shared', via: 'added' }, git({ '/work/shared': null }))).toBe(null)
   })
   test('a focus inside a section takes its repo; elsewhere the focus folder\'s own answer', () => {
-    const secs = [{ root: '/tmp/fv-other', via: 'git' as const }]
-    expect(focusRepo('/tmp/fv-other/src', secs, git({}))).toBe('/tmp/fv-other')
+    const secs = [{ root: '/tmp/ccfiles-other', via: 'git' as const }]
+    expect(focusRepo('/tmp/ccfiles-other/src', secs, git({}))).toBe('/tmp/ccfiles-other')
     expect(focusRepo('/tmp', secs, git({ '/tmp': null }))).toBe(null)
     expect(focusRepo('/tmp', secs, git({}))).toBe(undefined)
     expect(focusRepo('/srv/repo/a', secs, git({ '/srv/repo/a': '/srv/repo' }))).toBe('/srv/repo')

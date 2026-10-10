@@ -1,5 +1,5 @@
-// Replays a persisted file-viewer log and prints the derived view (live checks).
-// Usage: bun mods/file-viewer/scripts/inspect-log.ts <path/to/log.jsonl>
+// Replays a persisted ccfiles log and prints the derived view (live checks).
+// Usage: bun mods/ccfiles/scripts/inspect-log.ts <path/to/log.jsonl>
 import { readFileSync } from 'node:fs'
 import { parseLog } from '../src/log.ts'
 import { replay } from '../src/reducer.ts'
@@ -9,7 +9,7 @@ import { fmtEstTokens } from '../src/tokens.ts'
 const path = process.argv[2]
 if (!path) throw new Error('usage: inspect-log.ts <log.jsonl>')
 const records = parseLog(readFileSync(path, 'utf8'))
-if (!records) throw new Error('not a file-viewer log')
+if (!records) throw new Error('not a ccfiles log')
 const s = replay(records)
 for (const f of s.files.values()) {
   if (f.path.startsWith('skill-description:') && !f.path.endsWith(':demo')) continue

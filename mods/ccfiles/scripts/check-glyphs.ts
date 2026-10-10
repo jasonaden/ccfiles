@@ -2,7 +2,7 @@
 // "Glyphs and row meta" and the table under "## Glyphs" in docs/agents/REQUIREMENTS.md must list the same glyphs;
 // the README's meanings must match the code's word for word.
 // Every key the help view lists (KEY_TABLE) also has a row in the README's Keys table.
-// Usage: node --experimental-strip-types mods/file-viewer/scripts/check-glyphs.ts
+// Usage: node --experimental-strip-types mods/ccfiles/scripts/check-glyphs.ts
 import { readFileSync } from 'node:fs'
 import { GLYPH_TABLE, KEY_TABLE } from '../src/view/glyphs.ts'
 

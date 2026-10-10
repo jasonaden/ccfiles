@@ -112,7 +112,7 @@ describe('instruction loads', () => {
   })
 
   test('a capped auto-load covers only the loaded lines and is capped', () => {
-    const MEM = '/home/u/.claude/projects/-tmp-fv/memory/MEMORY.md'
+    const MEM = '/home/u/.claude/projects/-tmp-ccfiles/memory/MEMORY.md'
     const f = file(
       [makeEvent({ kind: 'autoload', path: MEM, source: 'promptContext', estTokens: 2154, origin: 'memory', ranges: [[1, 200]], totalLines: 260, capped: true })],
       MEM,

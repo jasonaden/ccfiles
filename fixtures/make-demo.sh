@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Builds a small TypeScript project with git history and one local change, plus a separate
 # repo at <dir>-shared for an outside-root section. Used for the README screenshots.
-# Usage: fixtures/make-demo.sh [target-dir]   (default /tmp/fv-demo)
+# Usage: fixtures/make-demo.sh [target-dir]   (default /tmp/ccfiles-demo)
 set -euo pipefail
-D="${1:-/tmp/fv-demo}"
+D="${1:-/tmp/ccfiles-demo}"
 rm -rf "$D"; mkdir -p "$D"/{src/routes,src/db,src/lib,tests,docs,.claude/rules}
 cd "$D"
 gen() { # file, header, n functions

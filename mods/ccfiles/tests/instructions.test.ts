@@ -13,11 +13,11 @@ const AGENTS = `${CWD}/AGENTS.md`
 const RULE = `${CWD}/.claude/rules/ts.md`
 const SUB_CLAUDE = `${CWD}/sub/CLAUDE.md`
 const SKILL_DIR = `${CWD}/.claude/skills/demo`
-const CLAUDE_TEXT = '# Fixture project instructions\nThis is the File Viewer fixture repo. Keep answers short.\n@docs/style.md\n'
+const CLAUDE_TEXT = '# Fixture project instructions\nThis is the ccfiles fixture repo. Keep answers short.\n@docs/style.md\n'
 const STYLE_TEXT = '# Style guide (imported from CLAUDE.md)\n- Use two-space indentation.\n- Prefer named exports.\n'
 const LISTING =
   'The following skills are available for use with the Skill tool:\n\n' +
-  '- demo: Demo skill for the File Viewer fixture. Use when the user says "run the demo skill".\n' +
+  '- demo: Demo skill for the ccfiles fixture. Use when the user says "run the demo skill".\n' +
   '- marketing:brand-review: Review content against your brand voice.'
 const SKILL_TEXT = `Base directory for this skill: ${SKILL_DIR}\n\n# Demo skill\nWhen invoked, read \`reference.md\` in this skill's directory (lines 1-200 only) and summarize it in one line.\n`
 
@@ -834,7 +834,7 @@ describe('persistence and resume', () => {
     ])
     const h = harness(on, { ...FILES_WITH_LOG(previous) })
     engine(on)
-    await $.classic.InstructionsLoaded({ file_path: CLAUDE, memory_type: 'Project', load_reason: 'session_start', transcript_path: '/home/u/.claude/projects/-tmp-fv/s1.jsonl' } as never)
+    await $.classic.InstructionsLoaded({ file_path: CLAUDE, memory_type: 'Project', load_reason: 'session_start', transcript_path: '/home/u/.claude/projects/-tmp-ccfiles/s1.jsonl' } as never)
     await $.prompt.context({ blocks: [], instructionFiles: [FILES[0]!] } as never)
     await endSession($)
     const s = h.state()
@@ -852,8 +852,8 @@ describe('persistence and resume', () => {
     engine(on)
     const t = tools(on)
     await t.call($, { tool: 'Read', file_path: small }, readResult(small, SMALL))
-    await $.classic.UserPromptSubmit({ prompt: 'ok', transcript_path: '/home/u/.claude/projects/-tmp-fv/s1.jsonl' } as never)
-    await $.classic.Stop({ stop_hook_active: false, transcript_path: '/home/u/.claude/projects/-tmp-fv/s1.jsonl' } as never)
+    await $.classic.UserPromptSubmit({ prompt: 'ok', transcript_path: '/home/u/.claude/projects/-tmp-ccfiles/s1.jsonl' } as never)
+    await $.classic.Stop({ stop_hook_active: false, transcript_path: '/home/u/.claude/projects/-tmp-ccfiles/s1.jsonl' } as never)
     await endSession($)
     const s = h.state()
     expect(rangeSummary(s.files.get(big)!)).toBe('1–200 / 1,323')
@@ -865,9 +865,9 @@ describe('persistence and resume', () => {
     engine(on)
     await startSession($)
     await sessionStartLoads($)
-    await $.classic.SessionStart({ source: 'clear', transcript_path: '/home/u/.claude/projects/-tmp-fv/s2.jsonl', cwd: CWD } as never)
+    await $.classic.SessionStart({ source: 'clear', transcript_path: '/home/u/.claude/projects/-tmp-ccfiles/s2.jsonl', cwd: CWD } as never)
     await endSession($)
-    expect(h.written.get('/home/u/.claude/projects/-tmp-fv/s2/file-viewer/log.jsonl')).toBe(undefined)
+    expect(h.written.get('/home/u/.claude/projects/-tmp-ccfiles/s2/ccfiles/log.jsonl')).toBe(undefined)
     expect(h.state().files.size).toBeGreaterThan(0)
   })
 })

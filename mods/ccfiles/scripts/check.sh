@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# CI gate for the file-viewer mod: strict validate, no network APIs, tests.
-# Usage: mods/file-viewer/scripts/check.sh
+# CI gate for the ccfiles mod: strict validate, no network APIs, tests.
+# Usage: mods/ccfiles/scripts/check.sh
 set -euo pipefail
 MOD="$(cd "$(dirname "$0")/.." && pwd)"
 

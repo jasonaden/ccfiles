@@ -128,14 +128,16 @@ export function parseCommand(command: string, cwd: string, home: string | null =
     const out = !first.toFile && pipeline.slice(1).every(keepsLines)
     if (READERS.has(program)) {
       const read = parseReader(program, stage)
-      if (read) actions.push({ ...read, files: read.files.map(resolve), piped })
+      const files = read ? read.files.filter(literal) : []
+      if (read && files.length > 0) actions.push({ ...read, files: files.map(resolve), piped })
     } else if (SEARCHERS.has(program)) {
       const s = parseSearch(program, stage, dir)
-      actions.push({ ...s, files: s.files.map(resolve), dir, out, shared })
+      actions.push({ ...s, files: s.files.filter(literal).map(resolve), dir, out, shared })
     } else if (program === 'find' || program === 'ls' || program === 'wc') {
       const files = operands(words.slice(1), program === 'find' ? FIND_VALUE_FLAGS : new Set())
       const targets = program === 'find' ? [files[0] ?? '.'] : files.length > 0 ? files : program === 'ls' ? ['.'] : []
-      actions.push({ kind: 'listing', program, files: targets.map(resolve), dir, out, shared })
+      const known = targets.filter(literal)
+      if (known.length > 0) actions.push({ kind: 'listing', program, files: known.map(resolve), dir, out, shared })
     }
     // `… | xargs rg -n Y`: the search xargs runs writes stdout, over files we don't know.
     const last = pipeline[pipeline.length - 1]!
@@ -516,6 +518,9 @@ function wcCounts(stdout: string, cwd: string): Map<string, number> {
   }
   return m
 }
+
+/** A word the shell passes as written: no variable, substitution or glob, whose real value we can't know. */
+const literal = (w: string) => !/[$`*?[]/.test(w)
 
 function operands(args: readonly string[], valueFlags: ReadonlySet<string>): string[] {
   const out: string[] = []

@@ -2,7 +2,7 @@
 
 ## claude-code-filetree
 
-The File Viewer's rows Client (`mods/file-viewer/hooks/rows.ts`: a surface module that draws the list, with hover,
+The ccfiles rows Client (`mods/ccfiles/hooks/rows.ts`: a surface module that draws the list, with hover,
 click, drag-to-scroll and a shimmer band over the name of the file being worked on) follows the structure of
 `hooks/rows.tsx` and the way `hooks/register.tsx` mounts it in **claude-code-filetree** by Kurt Buhler
 (<https://github.com/data-goblin/claude-code-filetree>). The shimmer (a band moving on a short tick, only while
@@ -36,7 +36,7 @@ SOFTWARE.
 
 ## nvim-web-devicons
 
-The per-language icon colours in `mods/file-viewer/src/view/icons.ts` (the `c` value of each file-type entry, for
+The per-language icon colours in `mods/ccfiles/src/view/icons.ts` (the `c` value of each file-type entry, for
 TypeScript, JavaScript, JSON, Markdown, Python, Go, Rust, shell, YAML, CSS, HTML and the other listed types) are
 taken from **nvim-web-devicons** (<https://github.com/nvim-tree/nvim-web-devicons>, `default/icons_by_file_extension.lua`
 and `default/icons_by_filename.lua` on `master`, October 2026). The glyph table itself is this project's own, built

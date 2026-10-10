@@ -1,4 +1,4 @@
-// Wiring only: events → ingest → store → persisted log, and the /files panel.
+// Wiring only: events → ingest → store → persisted log, and the /ccfiles panel.
 // OBSERVE ONLY: every hook on Claude Code's events returns next(e) or the
 // untouched result of await next(e). The one exception is selection-as-context
 // on prompt.submit, off unless the user turns it on. The panel's own
@@ -307,23 +307,23 @@ export const register: Register = (on, options) => {
     return next({ ...e, context: [...(e.context ?? []), selectionLine(store.selection, store.cwd)] })
   }).catch(($, e, next) => next(e))
 
-  // ---- the /files panel -------------------------------------------------------
+  // ---- the /ccfiles panel -------------------------------------------------------
 
   on('session.start', async ($, e, next) => {
     try {
-      await $.command.register({ name: 'files', description: 'File Viewer: files Claude read, searched, edited; instruction files; ≈ tokens', immediate: true })
+      await $.command.register({ name: 'ccfiles', description: 'ccfiles: files Claude read, searched, edited; instruction files; ≈ tokens', immediate: true })
     } catch {}
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  on('command.run', { command: 'files' }, async ($, e) => {
+  on('command.run', { command: 'ccfiles' }, async ($, e) => {
     // A docked pane needs the fullscreen layout and ≥110 columns; never opens on its own.
     const why = openRefusal(e.presentation)
     if (why) return { text: why }
     const r = await $.ui.open({ id: PANE_ID, title: PANE_TITLE, focus: true })
     view.open = true
     void requestGit($, view, 'other')
-    return { text: r.isPlaced ? 'File Viewer open: 1 Tree · 2 Touched · 3 Instructions (keys: j/k move, h/l fold, d detail, s search, g help, f follow)' : `File Viewer: not placed${r.reason ? ` (${r.reason})` : ''}` }
+    return { text: r.isPlaced ? 'panel open: 1 Tree · 2 Touched · 3 Instructions (keys: j/k move, h/l fold, d detail, s search, g help, f follow)' : `panel not placed${r.reason ? ` (${r.reason})` : ''}` }
   })
 
   // A folder added with /add-dir roots the outside files under it (Claude Code fires this event for /add-dir).
@@ -367,10 +367,10 @@ export const register: Register = (on, options) => {
 
 // ---- panel ------------------------------------------------------------------------
 
-export const PANE_ID = 'file-viewer'
+export const PANE_ID = 'ccfiles'
 /** Two presses on one folder row within this many ms focus it. */
 const DOUBLE_MS = 450
-const PANE_TITLE = 'Files'
+const PANE_TITLE = 'ccfiles'
 const GIT_THROTTLE_MS = 2000
 const DEFAULT_PRUNED = ['.git', 'node_modules', 'dist', 'build', 'out', 'coverage', '.next', '.nuxt', '.turbo', '.cache', 'target', '.venv', 'venv', '__pycache__', '.mypy_cache', '.pytest_cache', '.gradle', '.idea', 'vendor']
 /** Stop walking the project past this many files (big repos). */
@@ -430,7 +430,7 @@ type View = {
    * cached project-marker answers, and one-level listings of outside folders (fold counts), each fetched lazily
    * after a render, never before a hook's `next(e)`.
    */
-  roots: { added: string[]; git: Map<string, string | null>; markers: Map<string, boolean>; listings: Map<string, string[]>; busy: boolean; settingsRead: boolean }
+  roots: { added: string[]; git: Map<string, string | null>; gitTries: Map<string, number>; markers: Map<string, boolean>; listings: Map<string, string[]>; busy: boolean; settingsRead: boolean }
   /** Git per section: each outside repo's snapshot by its top level, refreshed only while wanted (wantedRepos). */
   readonly repos: Map<string, RepoGit>
   /** Size and modified time per walked path (files and folders), for the date and size columns. */
@@ -465,7 +465,7 @@ function newView(store: Store, options: Record<string, unknown>): View {
     recovered: false,
     lastPress: null,
     info: new Map(),
-    roots: { added: [], git: new Map(), markers: new Map(), listings: new Map(), busy: false, settingsRead: false },
+    roots: { added: [], git: new Map(), gitTries: new Map(), markers: new Map(), listings: new Map(), busy: false, settingsRead: false },
     repos: new Map(),
   }
 }
@@ -499,10 +499,10 @@ async function detectGlyphs($: $, view: View, surface: string): Promise<void> {
   } catch {}
 }
 
-/** Why `/files` can't open here, with the fix; null when it can. */
+/** Why `/ccfiles` can't open here, with the fix; null when it can. */
 export function openRefusal(p: { isFullscreen: boolean; columns: number }): string | null {
-  if (!p.isFullscreen) return 'File Viewer needs the fullscreen layout to dock beside the transcript. Run /tui fullscreen, then /files.'
-  if (p.columns < 110) return `File Viewer needs a terminal at least 110 columns wide (this one is ${p.columns}). Widen it to ≥110 columns, then run /files.`
+  if (!p.isFullscreen) return 'ccfiles needs the fullscreen layout to dock beside the transcript. Run /tui fullscreen, then /ccfiles.'
+  if (p.columns < 110) return `ccfiles needs a terminal at least 110 columns wide (this one is ${p.columns}). Widen it to ≥110 columns, then run /ccfiles.`
   return null
 }
 
@@ -923,6 +923,11 @@ async function resolveRoots($: $, view: View): Promise<void> {
     if (focus && !isUnder(focus, view.store.cwd ?? '/') && focusRepo(focus, secs, (d) => r.git.get(d)) === undefined) extra.add(focus.length > 1 ? focus.replace(/\/+$/, '') : focus)
     for (const dir of [...new Set([...gitDirsToResolve(paths, ctx), ...extra])].slice(0, 6)) {
       const out = await $.process.run(revParseArgv(dir), { timeoutMs: 3000 }).catch(() => null)
+      // A run that never finished (timed out, couldn't start) says nothing about the folder: ask again on a later
+      // pass, up to three times, before taking it as no repo.
+      const tries = (r.gitTries.get(dir) ?? 0) + 1
+      r.gitTries.set(dir, tries)
+      if (out === null && tries < 3) continue
       r.git.set(dir, parseRevParse(dir, out))
       changed = true
     }
@@ -1015,7 +1020,7 @@ async function walkProject($: $, view: View, root: string, now: number): Promise
 async function refreshLook($: $, view: View, now: number): Promise<void> {
   if (now - view.look.checkedAt < 2000) return
   view.look.checkedAt = now
-  const path = view.palettePath ?? (view.store.claudeDir ? `${view.store.claudeDir}/file-viewer.colors.json` : null)
+  const path = view.palettePath ?? (view.store.claudeDir ? `${view.store.claudeDir}/ccfiles.colors.json` : null)
   let text = view.look.text
   if (path) {
     let mtime: number | null = null
@@ -1048,7 +1053,7 @@ async function refreshLook($: $, view: View, now: number): Promise<void> {
   const warning = cfg.warnings.join('; ')
   if (warning && warning !== view.look.warned) {
     // One warning per bad key, logged once per version of the file.
-    for (const w of cfg.warnings) $.ui.log(`file-viewer palette (${path}): ${w}`)
+    for (const w of cfg.warnings) $.ui.log(`ccfiles palette (${path}): ${w}`)
   }
   view.look.warned = warning || null
 }

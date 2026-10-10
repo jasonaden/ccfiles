@@ -6,10 +6,10 @@ export const LOG_VERSION = 1
 /** `$.fs.write` refuses files over 4 MiB; stay under it. */
 export const MAX_LOG_CHARS = 3_800_000
 
-/** `~/.claude/projects/<p>/<session>.jsonl` → `~/.claude/projects/<p>/<session>/file-viewer/log.jsonl` */
+/** `~/.claude/projects/<p>/<session>.jsonl` → `~/.claude/projects/<p>/<session>/ccfiles/log.jsonl` */
 export function logPathFor(transcriptPath: string): string | null {
   const m = /^(.*)\/([^/]+)\.jsonl$/.exec(transcriptPath)
-  return m ? `${m[1]}/${m[2]}/file-viewer/log.jsonl` : null
+  return m ? `${m[1]}/${m[2]}/ccfiles/log.jsonl` : null
 }
 
 /** `~/.claude/projects/<p>/<session>.jsonl` → `~/.claude` (the user's Claude config dir). */

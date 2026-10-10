@@ -1,6 +1,6 @@
-# File Viewer: requirements
+# ccfiles: requirements
 
-The File Viewer is a Claude Code mod (`mods/file-viewer`, plugin name `file-viewer`). It adds a docked side
+ccfiles (Claude Code files) is a Claude Code mod (`mods/ccfiles`, plugin name `ccfiles`). It adds a docked side
 panel that shows which files Claude read, searched, edited and committed, how much of each file it saw, which
 instruction files are in its context, and an **estimated** token cost per file next to exact API usage.
 
@@ -24,7 +24,7 @@ Terms used below:
   - the opt-in selection line on `prompt.submit` (SET table, `selectionContext`);
   - the `classic.SessionStart` result gains two `watchPaths` (`<cwd>/.git/index`, `<cwd>/.git/HEAD`). This adds
     file watches only; nothing Claude receives changes.
-  The panel's own hooks (`command.run` for `/files`, and `ui.render`, `ui.scroll`, `ui.message` for its own pane
+  The panel's own hooks (`command.run` for `/ccfiles`, and `ui.render`, `ui.scroll`, `ui.message` for its own pane
   id) answer only for this mod's pane and pass everything else on.
 - **CORE-2 No network.** The mod never calls `$.http`, `$.model` or `$.mcp`, and uses no token-counting API.
   `scripts/check.sh` fails if `claude plugin validate`'s `calls:` line lists any of them. Local processes are
@@ -44,13 +44,13 @@ Terms used below:
 
 ## Opening the panel
 
-- **PANEL-1** `/files` (registered at `session.start`, immediate) opens a docked pane with id `file-viewer` and
+- **PANEL-1** `/ccfiles` (registered at `session.start`, immediate) opens a docked pane with id `ccfiles` and
   title `Files`, with focus. The panel never opens on its own.
-- **PANEL-2** Outside the fullscreen layout `/files` refuses with: "File Viewer needs the fullscreen layout to
-  dock beside the transcript. Run /tui fullscreen, then /files." Under 110 terminal columns it refuses with the
-  width and "Widen it to ≥110 columns, then run /files."
-- **PANEL-3** When placed it answers `File Viewer open: 1 Tree · 2 Touched · 3 Instructions (keys: …)`; when not
-  placed, `File Viewer: not placed (<reason>)`.
+- **PANEL-2** Outside the fullscreen layout `/ccfiles` refuses with: "ccfiles needs the fullscreen layout to
+  dock beside the transcript. Run /tui fullscreen, then /ccfiles." Under 110 terminal columns it refuses with the
+  width and "Widen it to ≥110 columns, then run /ccfiles."
+- **PANEL-3** When placed it answers `panel open: 1 Tree · 2 Touched · 3 Instructions (keys: …)`; when not
+  placed, `panel not placed (<reason>)`.
 - **PANEL-4** Recording runs whether or not the panel is open. Redraws, the project walk and outside-repo git runs
   happen only while it is open.
 
@@ -441,7 +441,7 @@ with a Nerd Font the meter has 8 steps.
   `rev-list --left-right --count @{u}...HEAD`, `branch --show-current`, `rev-parse HEAD`,
   `rev-parse --abbrev-ref --symbolic-full-name @{u}`. 5 s timeout each. Outside a repo there is no git state.
 - **GIT-2 Refresh.** After a Bash call, after Edit/Write/NotebookEdit, on a change to `.git/index` or `.git/HEAD`,
-  on prompt submit, when the person focuses the pane, when `/files` opens, and on `↻`. At most one run per 2 s; a
+  on prompt submit, when the person focuses the pane, when `/ccfiles` opens, and on `↻`. At most one run per 2 s; a
   request inside the window runs once at its end, and a request during a run runs once after it.
 - **GIT-3 Letters.** `A`, `M`, `D`, `R` (renames and copies), `?` untracked, `!` ignored; staged when the index
   side changed. Rename numstat keys on the new path; quoted paths are unquoted.
@@ -503,7 +503,7 @@ with a Nerd Font the meter has 8 steps.
 
 ## Persistence
 
-- **LOG-1** The session log is JSONL at `<transcript dir>/<session id>/file-viewer/log.jsonl`: a header
+- **LOG-1** The session log is JSONL at `<transcript dir>/<session id>/ccfiles/log.jsonl`: a header
   `{t: header, v: 1}`, then one record per line (`event`, `usage`, `step`, `agent`, `injected`, `shell`).
   Replaying it through the reducer rebuilds the same view. Unknown lines are skipped.
 - **LOG-2** The whole log is rewritten after 25 new records, at turn end, on Stop, PreCompact, SessionEnd and
@@ -533,7 +533,7 @@ TREE-1's list) and `palettePath` (replacing PAL-1's file path).
 
 ## Palette
 
-- **PAL-1** Overrides live in `<config dir>/file-viewer.colors.json` (the config dir comes from the transcript
+- **PAL-1** Overrides live in `<config dir>/ccfiles.colors.json` (the config dir comes from the transcript
   path): flat keys `read`, `search`, `edit`, `commit`, `instruction`, `pending`, `error`, `git.A`, `git.M`,
   `git.D`, `git.R`, `git.untracked`, `git.ignored`, `added`, `removed`, `muted`, `accent`, `selection`, `text`,
   `fill`, `fill.edit`, `fill.commit` (each `#rgb` or `#rrggbb`), `fill.darkness` (0–1) and `theme`

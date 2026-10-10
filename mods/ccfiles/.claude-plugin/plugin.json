@@ -1,12 +1,12 @@
 {
-  "name": "file-viewer",
+  "name": "ccfiles",
   "version": "0.1.0",
   "description": "Shows which files Claude read, searched, edited and committed, how much of each it saw, which instruction files are in context, and estimated (chars ÷ 4) tokens per file",
   "author": {
     "name": "Jason Aden"
   },
-  "homepage": "https://github.com/jasonaden/claude-file-viewer",
-  "repository": "https://github.com/jasonaden/claude-file-viewer",
+  "homepage": "https://github.com/jasonaden/ccfiles",
+  "repository": "https://github.com/jasonaden/ccfiles",
   "license": "MIT",
   "keywords": [
     "files",

@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Generates a small fixture project for live checks. Usage: fixtures/make-fixture.sh [target-dir]
-# Default target is /tmp/fv-fixture (outside this repo, so this repo's CLAUDE.md/AGENTS.md
+# Default target is /tmp/ccfiles-fixture (outside this repo, so this repo's CLAUDE.md/AGENTS.md
 # are NOT ancestors of the fixture and don't pollute InstructionsLoaded).
 # Also seeds auto-memory MEMORY.md (260 lines) at ~/.claude/projects/<sanitized-path>/memory/.
 set -euo pipefail
-T="${1:-/tmp/fv-fixture}"
+T="${1:-/tmp/ccfiles-fixture}"
 rm -rf "$T"; mkdir -p "$T"/{docs,sub,.claude/rules,.claude/skills/demo}
 cd "$T"
 for i in $(seq 1 1323); do echo "big.md line $i: lorem ipsum dolor sit amet, consectetur adipiscing elit."; done > big.md
 { echo "// small.ts — 40 lines"; for i in $(seq 2 39); do echo "export const v$i = $i; // line $i"; done; echo "// end of small.ts (line 40)"; } > small.ts
 cat > CLAUDE.md <<'MD'
 # Fixture project instructions
-This is the File Viewer fixture repo. Keep answers short.
+This is the ccfiles fixture repo. Keep answers short.
 @docs/style.md
 MD
 cat > docs/style.md <<'MD'
@@ -47,7 +47,7 @@ MD
 cat > .claude/skills/demo/SKILL.md <<'MD'
 ---
 name: demo
-description: Demo skill for the File Viewer fixture. Use when the user says "run the demo skill".
+description: Demo skill for the ccfiles fixture. Use when the user says "run the demo skill".
 ---
 # Demo skill
 When invoked, read `reference.md` in this skill's directory (lines 1-200 only) and summarize it in one line.
@@ -55,7 +55,7 @@ MD
 for i in $(seq 1 600); do echo "reference.md line $i: demo skill reference material."; done > .claude/skills/demo/reference.md
 # AGENTS.md is present but not loaded while a CLAUDE.md exists.
 printf '# AGENTS.md (fixture)\nAgents: prefer small diffs.\n' > AGENTS.md
-if [ "${FV_AGENTS_ONLY:-0}" = 1 ]; then rm -f CLAUDE.md; fi   # AGENTS.md-only variant
+if [ "${CCFILES_AGENTS_ONLY:-0}" = 1 ]; then rm -f CLAUDE.md; fi   # AGENTS.md-only variant
 git init -q -b main && git add -A && git -c user.email=fixture@example.com -c user.name=fixture commit -qm "fixture"
 # Auto memory: ~/.claude/projects/<cwd with / and . replaced by ->/memory/MEMORY.md
 SAN="$(echo "$T" | sed 's#[/.]#-#g')"

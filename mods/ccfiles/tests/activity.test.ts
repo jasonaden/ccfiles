@@ -346,7 +346,7 @@ describe('lights expiring never move the list', () => {
     await readAll($, calls, h, Array.from({ length: 30 }, (_, i) => i))
     await h.clock.advance(3000)
     // A scroll by hand pauses follow; then reads light rows: the newest go to the top (off screen above).
-    await $.ui.scroll({ component: 'Pane', requestId: 'file-viewer', offset: 0, by: 12, bodyRows: 14, contentRows: 60, origin: { kind: 'person' } } as never)
+    await $.ui.scroll({ component: 'Pane', requestId: 'ccfiles', offset: 0, by: 12, bodyRows: 14, contentRows: 60, origin: { kind: 'person' } } as never)
     await readAll($, calls, h, [3, 14, 16])
     await ui.redraw()
     const ids = (ls: RowLine[]) => ls.filter((l) => l.id).map((l) => l.id)
@@ -372,7 +372,7 @@ describe('lights expiring never move the list', () => {
     await ui.press({ key: 'tab:touched' })
     await readAll($, calls, h, Array.from({ length: 30 }, (_, i) => i))
     await h.clock.advance(3000)
-    await $.ui.scroll({ component: 'Pane', requestId: 'file-viewer', offset: 0, by: 100, bodyRows: 14, contentRows: 60, origin: { kind: 'person' } } as never)
+    await $.ui.scroll({ component: 'Pane', requestId: 'ccfiles', offset: 0, by: 100, bodyRows: 14, contentRows: 60, origin: { kind: 'person' } } as never)
     await ui.redraw()
     const before = (await clientLines(ui)).filter((l) => l.id).map((l) => l.id)
     // Re-reads of the three newest files (top of Touched, scrolled away).

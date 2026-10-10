@@ -1,7 +1,7 @@
-# Claude Code mod API: facts the File Viewer relies on
+# Claude Code mod API: facts ccfiles relies on
 
 Observed on Claude Code **2.1.295** (macOS and Linux, terminal, fullscreen layout). Subagent attribution was also
-seen on 2.1.296. The generated types at `mods/file-viewer/.claude-plugin/types/claude-code/index.d.ts` are
+seen on 2.1.296. The generated types at `mods/ccfiles/.claude-plugin/types/claude-code/index.d.ts` are
 written on every `--plugin-dir` load and are the authoritative API reference; trust them over web docs.
 
 ## Loading and tooling

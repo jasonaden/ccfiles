@@ -7,7 +7,7 @@ import { host, pane, screen } from './panel-kit.ts'
 import { clickRow, clientLines, lineText } from './rows-client.ts'
 import { LIT_MS } from '../src/view/rows.ts'
 
-const O = '/tmp/fv-other'
+const O = '/tmp/ccfiles-other'
 const X = `${O}/src/x.ts`
 const SHARED = '/work/shared'
 const A = `${SHARED}/pkg/a.ts`
@@ -19,8 +19,9 @@ type Run = { argv: string; cwd: string | undefined }
  * Answers the read-only git commands: the session repo at CWD (branch main, small.ts modified), the other repo at O
  * (branch feature, src/x.ts modified), `/work/shared/pkg` its own repo, and nothing else a repo.
  */
-function git(on: On): Run[] {
+function git(on: On, opts: { failFirstLookup?: boolean } = {}): Run[] {
   const runs: Run[] = []
+  let failLookup = opts.failFirstLookup ?? false
   on('prompt.submit', (_$, e) => ({ text: e.text }))
   on('process.run', (_$, e) => {
     const argv = e.argv.join(' ')
@@ -28,6 +29,10 @@ function git(on: On): Run[] {
     runs.push({ argv, cwd })
     const out = (exitCode: number, stdout = '') => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
     if (e.argv[1] === '-C') {
+      if (failLookup) {
+        failLookup = false
+        throw new Error('still running at the timeout')
+      }
       const dir = e.argv[2]!
       for (const top of [O, `${SHARED}/pkg`]) if (dir === top || dir.startsWith(top + '/')) return out(0, `${top}\n${dir === top ? '' : dir.slice(top.length + 1) + '/'}\n`)
       return out(128)
@@ -161,23 +166,31 @@ describe('Touched tab grouped by section, in the panel', () => {
 })
 
 describe('permissions.additionalDirectories from the settings files', () => {
-  const run = async ($: Engine, on: On, settings: Record<string, string>) => {
+  const run = async ($: Engine, on: On, settings: Record<string, string>, opts: { failFirstLookup?: boolean; file?: string } = {}) => {
     const h = harness(on, { ...files, ...settings })
     host(on)
-    git(on)
+    const runs = git(on, opts)
     const t = tools(on)
     await startSession($)
     const ui = await $.ui.mount(pane(70, 24))
-    await t.call($, { tool: 'Read', file_path: A }, readResult(A, files[A]!))
+    const file = opts.file ?? A
+    await t.call($, { tool: 'Read', file_path: file }, readResult(file, files[file]!))
     for (let i = 0; i < 4; i++) {
       await h.clock.settle()
       await ui.redraw()
     }
+    lookups = runs.filter((r) => r.argv.startsWith('git -C')).length
     return (await clientLines(ui)).map((l) => l.id).filter((id) => id.startsWith('r:'))
   }
+  let lookups = 0
 
   test('without settings, git roots the file at its own repo', { options: { glyphs: 'plain' } }, async ($, on) => {
     expect(await run($, on, {})).toEqual([`r:${SHARED}/pkg`])
+  })
+
+  test('a git lookup that never finished (timed out) is asked again, not taken as "no repo"', { options: { glyphs: 'plain' } }, async ($, on) => {
+    expect(await run($, on, {}, { failFirstLookup: true, file: X })).toEqual([`r:${O}`])
+    expect(lookups).toBeGreaterThan(1)
   })
 
   test('a directory in the project settings roots it instead; a broken local settings file changes nothing', { options: { glyphs: 'plain' } }, async ($, on) => {

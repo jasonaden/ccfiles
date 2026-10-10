@@ -272,7 +272,7 @@ describe('description-only skills fold', () => {
 
 describe('search', () => {
   test('matches paths relative to the project, not the absolute prefix', () => {
-    const root = '/tmp/fv-agents'
+    const root = '/tmp/ccfiles-agents'
     const records: LogRecord[] = [
       { t: 'event', e: makeEvent({ kind: 'autoload', path: `${root}/AGENTS.md`, source: 'promptContext', whole: true, totalLines: 2, estTokens: 13, ts: 1 }) },
       { t: 'event', e: makeEvent({ kind: 'autoload', path: `${root}/.claude/rules/globs-control.md`, source: 'promptContext', whole: true, totalLines: 2, estTokens: 27, ts: 1 }) },

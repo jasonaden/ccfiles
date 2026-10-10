@@ -8,12 +8,12 @@ type Node = { type?: string; key?: string; props?: Record<string, unknown>; chil
 
 export const pane = (bodyColumns = 60, bodyRows = 16) =>
   ({
-    plugin: 'file-viewer',
+    plugin: 'ccfiles',
     surface: 'terminal',
     component: 'Pane',
-    requestId: 'file-viewer',
+    requestId: 'ccfiles',
     viewport: { columns: 160, rows: 45, isFullscreen: true },
-    props: { title: 'Files', isFocused: true, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows }, view: {} },
+    props: { title: 'ccfiles', isFocused: true, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows }, view: {} },
   }) as const
 
 /** Stubs Claude Code's theme, the pane, the log, the clipboard and the focus ring. */

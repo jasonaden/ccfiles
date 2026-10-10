@@ -1,10 +1,10 @@
-# File Viewer for Claude Code
+# ccfiles
 
-A docked side panel for [Claude Code](https://claude.com/claude-code) that shows what Claude is doing to your
-files, live: which files it read, searched, edited and committed, how much of each file it actually read,
-which instruction files are in its context, and roughly what each one costs in tokens.
+**Claude Code files.** A docked side panel for [Claude Code](https://claude.com/claude-code) that shows what
+Claude is doing to your files, live: which files it read, searched, edited and committed, how much of each
+file it actually read, which instruction files are in its context, and roughly what each one costs in tokens.
 
-![File Viewer docked next to a Claude Code session](docs/images/overview.png)
+![ccfiles docked next to a Claude Code session](docs/images/overview.png)
 
 - **Coverage, not just "touched".** A meter in the gutter shows how much of each file Claude read: a file it
   read 40 lines of looks different from one it read in full.
@@ -35,21 +35,21 @@ calls.
 From inside Claude Code:
 
 ```
-/plugin marketplace add jasonaden/claude-file-viewer
-/plugin install file-viewer@claude-file-viewer
+/plugin marketplace add jasonaden/ccfiles
+/plugin install ccfiles@ccfiles
 ```
 
 Or run it from a clone without installing:
 
 ```bash
-git clone https://github.com/jasonaden/claude-file-viewer
+git clone https://github.com/jasonaden/ccfiles
 ```
 
 ```bash
-claude --plugin-dir ./claude-file-viewer/mods/file-viewer
+claude --plugin-dir ./ccfiles/mods/ccfiles
 ```
 
-Then run **`/files`**. The panel docks on the right. It never opens on its own. If the layout isn't fullscreen
+Then run **`/ccfiles`**. The panel docks on the right. It never opens on its own. If the layout isn't fullscreen
 or the terminal is too narrow, it says so and tells you how to fix it.
 
 ## The panel
@@ -184,7 +184,7 @@ comes back.
 
 ## Settings
 
-Run `/plugin configure file-viewer@claude-file-viewer` in Claude Code, or set these in Claude Code's plugin
+Run `/plugin configure ccfiles@ccfiles` in Claude Code, or set these in Claude Code's plugin
 settings:
 
 | Setting | Values (default first) | Does |
@@ -200,7 +200,7 @@ settings:
 ### Colours
 
 The panel follows Claude Code's `dark` or `light` theme. The dark palette draws on your terminal's background,
-and the light palette paints its own. To override any colour, edit `~/.claude/file-viewer.colors.json`:
+and the light palette paints its own. To override any colour, edit `~/.claude/ccfiles.colors.json`:
 
 ```json
 { "theme": "light", "read": "#2f5f8f", "edit": "#b0285c" }
@@ -235,25 +235,25 @@ Inside tmux, Claude Code draws 256 colours unless you start it with `CLAUDE_CODE
 The mod runs inside Claude Code and makes no network requests. It reads only what Claude Code passes to its
 hooks, and it runs read-only `git` commands (`status`, `diff --numstat`, `rev-parse`, `rev-list`) in your repos.
 It keeps a small event log next to the session transcript
-(`~/.claude/projects/<project>/<session>/file-viewer/log.jsonl`).
+(`~/.claude/projects/<project>/<session>/ccfiles/log.jsonl`).
 
 ## Development
 
-The mod lives in [`mods/file-viewer`](mods/file-viewer). Run the full gate (strict validation, a no-network
+The mod lives in [`mods/ccfiles`](mods/ccfiles). Run the full gate (strict validation, a no-network
 check, type check, glyph-table check, tests) from the repo root:
 
 ```bash
-mods/file-viewer/scripts/check.sh
+mods/ccfiles/scripts/check.sh
 ```
 
 For a live session on a scratch project:
 
 ```bash
-fixtures/make-fixture.sh /tmp/fv-fixture
+fixtures/make-fixture.sh /tmp/ccfiles-fixture
 ```
 
 ```bash
-cd /tmp/fv-fixture && claude --plugin-dir <repo>/mods/file-viewer
+cd /tmp/ccfiles-fixture && claude --plugin-dir <repo>/mods/ccfiles
 ```
 
 `fixtures/make-demo.sh` builds the project used for the screenshots above. The mod reloads when its files

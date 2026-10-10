@@ -12,7 +12,7 @@ import { clickRow, clientLines, lineText, rowNode } from './rows-client.ts'
 const BIG_PATH = `${CWD}/big.md`
 const SMALL_PATH = `${CWD}/small.ts`
 const SUB_A_PATH = `${CWD}/sub/a.ts`
-const COLORS = '/home/u/.claude/file-viewer.colors.json'
+const COLORS = '/home/u/.claude/ccfiles.colors.json'
 const DARK = defaultPalette('dark')
 const LIGHT = defaultPalette('light')
 
@@ -67,12 +67,12 @@ function filledCells(row: Node, bg: string): number {
 
 const pane = (bodyColumns = 60, bodyRows = 16) =>
   ({
-    plugin: 'file-viewer',
+    plugin: 'ccfiles',
     surface: 'terminal',
     component: 'Pane',
-    requestId: 'file-viewer',
+    requestId: 'ccfiles',
     viewport: { columns: 160, rows: 45, isFullscreen: true },
-    props: { title: 'Files', isFocused: true, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows }, view: {} },
+    props: { title: 'ccfiles', isFocused: true, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows }, view: {} },
   }) as const
 
 /** Stubs what the panel asks of Claude Code: its theme, the pane, the log, the clipboard, the focus ring. */
@@ -103,9 +103,9 @@ function host(on: On, theme = 'dark') {
 }
 
 const runFiles = ($: Engine, isFullscreen: boolean, columns: number) =>
-  $.command.run({ command: 'files', args: '', origin: { kind: 'person' }, presentation: { isFullscreen, columns } } as never)
+  $.command.run({ command: 'ccfiles', args: '', origin: { kind: 'person' }, presentation: { isFullscreen, columns } } as never)
 
-describe('/files opens the panel only where it can dock', () => {
+describe('/ccfiles opens the panel only where it can dock', () => {
   test('refuses outside fullscreen and under 110 columns, with the reason and the fix; opens otherwise', async ($, on) => {
     harness(on)
     const h = host(on)
@@ -116,8 +116,8 @@ describe('/files opens the panel only where it can dock', () => {
     expect(narrow.text).toContain('100')
     expect(h.opened).toEqual([])
     const ok = await runFiles($, true, 110)
-    expect(ok.text).toContain('File Viewer open')
-    expect(h.opened).toEqual([expect.objectContaining({ id: 'file-viewer', focus: true })])
+    expect(ok.text).toContain('panel open')
+    expect(h.opened).toEqual([expect.objectContaining({ id: 'ccfiles', focus: true })])
   })
 })
 
@@ -205,7 +205,7 @@ describe('project root', () => {
     await startSession($)
     await t.call($, { tool: 'Read', file_path: SMALL_PATH }, readResult(SMALL_PATH, SMALL))
     // 2.1.295: the compact SessionStart carries the Bash shell's directory, not the project's.
-    await $.classic.SessionStart({ source: 'compact', transcript_path: '/home/u/.claude/projects/-tmp-fv/s1.jsonl', cwd: `${CWD}/sub` } as never)
+    await $.classic.SessionStart({ source: 'compact', transcript_path: '/home/u/.claude/projects/-tmp-ccfiles/s1.jsonl', cwd: `${CWD}/sub` } as never)
     const ui = await $.ui.mount(pane(90, 20))
     await ui.press({ key: 'tab:touched' })
     const lines = (await screen(ui)).map((l) => l.trimEnd())
@@ -553,7 +553,7 @@ describe('live behavior', () => {
     expect(await shown(f39)).toBe(true)
     // Open the untouched files of many/ so the list is longer than the pane, then scroll to its end.
     await clickRow(ui, `u:${CWD}/many`)
-    await $.ui.scroll({ component: 'Pane', requestId: 'file-viewer', offset: 0, by: 100, bodyRows: 14, contentRows: 60, origin: { kind: 'person' } } as never)
+    await $.ui.scroll({ component: 'Pane', requestId: 'ccfiles', offset: 0, by: 100, bodyRows: 14, contentRows: 60, origin: { kind: 'person' } } as never)
     // Paused follow dims the `◉` header button; no `follow paused (f)` text.
     expect(await followDimmed(ui)).toBe(true)
     expect((await screen(ui)).join('\n')).not.toContain('follow paused')
@@ -855,8 +855,8 @@ describe('closing the detail hands the keyboard to the prompt', () => {
     return { ui, h }
   }
   const handedBack = (h: ReturnType<typeof host>) => {
-    expect(h.closed).toEqual([expect.objectContaining({ id: 'file-viewer' })])
-    expect(h.opened).toEqual([expect.objectContaining({ id: 'file-viewer', title: 'Files' })])
+    expect(h.closed).toEqual([expect.objectContaining({ id: 'ccfiles' })])
+    expect(h.opened).toEqual([expect.objectContaining({ id: 'ccfiles', title: 'ccfiles' })])
     expect((h.opened[0] as { focus?: unknown }).focus).toBeUndefined()
   }
 
@@ -1032,7 +1032,7 @@ describe('selection as context', () => {
     const ui = await $.ui.mount(pane(60, 16))
     await clickRow(ui, `f:${SMALL_PATH}`)
     const r = await $.prompt.submit({ text: 'explain this', wait: false } as never)
-    expect(r.context).toEqual(['The user has small.ts selected in the File Viewer panel; "this file" or "this" may refer to it.'])
+    expect(r.context).toEqual(['The user has small.ts selected in the ccfiles panel; "this file" or "this" may refer to it.'])
   })
 
   test('off by default: a selected file adds nothing', async ($, on) => {

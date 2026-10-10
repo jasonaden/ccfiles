@@ -1,4 +1,4 @@
-# claude-file-viewer
+# ccfiles
 
 A Claude Code **mod** (a plugin with a hooks module) that shows, in a docked side panel, which files Claude
 touched, how much of each it read (line-range coverage), which instruction files are in context, git state,
@@ -7,7 +7,7 @@ subagent activity, and an **estimated** token cost per file.
 - Behaviour: [`docs/agents/REQUIREMENTS.md`](docs/agents/REQUIREMENTS.md). Code wins when they disagree; fix
   the doc in the same change.
 - Claude Code mod API facts the code relies on: [`docs/agents/PLATFORM.md`](docs/agents/PLATFORM.md).
-- The authoritative API reference is the generated `mods/file-viewer/.claude-plugin/types/claude-code/index.d.ts`,
+- The authoritative API reference is the generated `mods/ccfiles/.claude-plugin/types/claude-code/index.d.ts`,
   written on each `--plugin-dir` load and gitignored. Trust it over web docs.
 
 ## Rules
@@ -29,24 +29,24 @@ subagent activity, and an **estimated** token cost per file.
 
 | Path | What |
 |---|---|
-| `mods/file-viewer/hooks/register.ts` | the hooks module: event handlers, panel drawing, git, timers |
-| `mods/file-viewer/hooks/rows.ts` | the rows Client: draws the list, hover, clicks, scroll, shimmer |
-| `mods/file-viewer/src/` | pure logic: ingest, reducer, intervals, Bash parsing, tokens, git parsing, roots, palette |
-| `mods/file-viewer/src/view/` | pure view code: rows, row anatomy, header, footer, detail and help views, icons |
-| `mods/file-viewer/tests/` | unit and harness tests (`claude plugin test`) |
-| `mods/file-viewer/scripts/check.sh` | the gate: strict validate, no-network check, type check, glyph check, tests |
+| `mods/ccfiles/hooks/register.ts` | the hooks module: event handlers, panel drawing, git, timers |
+| `mods/ccfiles/hooks/rows.ts` | the rows Client: draws the list, hover, clicks, scroll, shimmer |
+| `mods/ccfiles/src/` | pure logic: ingest, reducer, intervals, Bash parsing, tokens, git parsing, roots, palette |
+| `mods/ccfiles/src/view/` | pure view code: rows, row anatomy, header, footer, detail and help views, icons |
+| `mods/ccfiles/tests/` | unit and harness tests (`claude plugin test`) |
+| `mods/ccfiles/scripts/check.sh` | the gate: strict validate, no-network check, type check, glyph check, tests |
 | `fixtures/make-fixture.sh` | builds a scratch project for live checks |
 
 ## How to work here
 
-- Write a failing `*.test.ts` with stubbed events, implement, then run `mods/file-viewer/scripts/check.sh`.
+- Write a failing `*.test.ts` with stubbed events, implement, then run `mods/ccfiles/scripts/check.sh`.
 - Keep pure logic in plain modules with plain unit tests; keep hooks thin.
 - Static-analysis rules from `claude plugin validate`: write `$.ns.method()` in full, use literal event names and
   literal `$.env.get('NAME')`, pass `$` only to top-level functions in the same file, use relative imports, and
   never use dynamic `import()`.
 - The plugin `name` must not start with `claude-` (validate rejects it).
-- Live check: `fixtures/make-fixture.sh /tmp/fv-fixture`, then
-  `cd /tmp/fv-fixture && claude --plugin-dir <repo>/mods/file-viewer`, `/tui fullscreen`, `/files`, in a terminal
+- Live check: `fixtures/make-fixture.sh /tmp/ccfiles-fixture`, then
+  `cd /tmp/ccfiles-fixture && claude --plugin-dir <repo>/mods/ccfiles`, `/tui fullscreen`, `/ccfiles`, in a terminal
   at least 110 columns wide. Always regenerate the fixture outside this repo; this repo's own AGENTS.md and
   CLAUDE.md would otherwise become ancestors of the test project.
 - Never print or commit secrets or personal data (emails, home-directory paths) in code, tests or docs.
