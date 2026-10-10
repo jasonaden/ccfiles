@@ -1,0 +1,4 @@
+{
+  "description": "file-viewer hooks module",
+  "modules": ["./register.ts"]
+}

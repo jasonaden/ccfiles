@@ -1,0 +1,16 @@
+{
+  "name": "claude-file-viewer",
+  "owner": {
+    "name": "Jason Aden"
+  },
+  "metadata": {
+    "description": "File Viewer: a Claude Code panel that shows which files Claude touched and how much of each it read"
+  },
+  "plugins": [
+    {
+      "name": "file-viewer",
+      "source": "./mods/file-viewer",
+      "description": "A docked panel showing which files Claude read, searched, edited and committed, how much of each it saw, and estimated tokens per file"
+    }
+  ]
+}

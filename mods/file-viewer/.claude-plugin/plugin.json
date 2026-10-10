@@ -1,0 +1,88 @@
+{
+  "name": "file-viewer",
+  "version": "0.1.0",
+  "description": "Shows which files Claude read, searched, edited and committed, how much of each it saw, which instruction files are in context, and estimated (chars ÷ 4) tokens per file",
+  "author": {
+    "name": "Jason Aden"
+  },
+  "homepage": "https://github.com/jasonaden/claude-file-viewer",
+  "repository": "https://github.com/jasonaden/claude-file-viewer",
+  "license": "MIT",
+  "keywords": [
+    "files",
+    "coverage",
+    "tokens",
+    "context",
+    "git",
+    "panel"
+  ],
+  "userConfig": {
+    "selectionContext": {
+      "type": "boolean",
+      "title": "Selection as context",
+      "description": "When a file is selected in the viewer, add one line naming it to each prompt you submit",
+      "default": false
+    },
+    "glyphs": {
+      "type": "string",
+      "title": "Icons",
+      "description": "File-type icons: auto (detect a Nerd Font), nerd, or plain Unicode",
+      "options": [
+        "auto",
+        "nerd",
+        "plain"
+      ],
+      "default": "auto"
+    },
+    "iconColor": {
+      "type": "string",
+      "title": "Icon colour",
+      "description": "muted icons, or coloured by language",
+      "options": [
+        "muted",
+        "language"
+      ],
+      "default": "language"
+    },
+    "coverage": {
+      "type": "string",
+      "title": "Coverage display",
+      "description": "meter: a glyph in the gutter; fill: a tint under the read share of the row",
+      "options": [
+        "meter",
+        "fill"
+      ],
+      "default": "meter"
+    },
+    "claudeCodeLoads": {
+      "type": "string",
+      "title": "Files Claude Code loads",
+      "description": "Show CLAUDE.md, rules and memory that Claude Code loads by itself in the Tree",
+      "options": [
+        "show",
+        "hide"
+      ],
+      "default": "show"
+    },
+    "palette": {
+      "type": "string",
+      "title": "Palette",
+      "description": "hex: the viewer's own colours; theme: follow your Claude Code theme's colour names",
+      "options": [
+        "hex",
+        "theme"
+      ],
+      "default": "hex"
+    },
+    "motion": {
+      "type": "string",
+      "title": "Motion",
+      "description": "on: names shimmer while Claude works on them; off: a static colour",
+      "options": [
+        "on",
+        "off"
+      ],
+      "default": "on"
+    }
+  }
+}
