@@ -55,7 +55,7 @@ isn't fullscreen or the terminal is too narrow, it says so and tells you how to 
 
 ## The panel
 
-![The Tree tab with git colours, coverage meters and an Explore subagent](docs/images/tree.png)
+![The Tree tab: column names and totals, coverage meters, git colours and +N −N counts, Explore badges, and the footer with the context bar](docs/images/tree.png)
 
 From top to bottom:
 
@@ -114,7 +114,7 @@ you click in the list, arrows and Enter work too.
 
 Closing the detail or help view with `d` or `q` hands the keyboard back to the prompt, so you can type at once.
 
-![The detail view of a partly read file: ranges, coverage, history and exact usage](docs/images/detail.png)
+![The detail view of a partly read, edited file: read and token figures, a line strip of the ranges read and written, and the history table](docs/images/detail.png)
 
 ## Glyphs and row meta
 
@@ -161,6 +161,10 @@ The right column shows one value at a time:
 A figure in parentheses, like `(≈1.2k)`, marks a file that only other agents read. It is left out of the
 current view's totals.
 
+Press `g` for the same keys, glyphs and marks in the panel.
+
+![The help view: keys, glyphs, and marks and words, each as a table](docs/images/help.png)
+
 ## Subagents
 
 ![The agents list expanded, with Explore badges in the gutter](docs/images/subagents.png)
@@ -173,6 +177,8 @@ it into a list.
 - **Viewpoint.** Click an agent, or press `a`, to see the tree as that agent saw it: its meters, ranges,
   re-reads and token figures, and its own context size in the footer.
 - **`u`** shows the session's exact usage and a per-agent table that adds up to the session total.
+
+![The usage view: the session's exact context, billed and output tokens, and a per-agent table](docs/images/usage.png)
 
 ## Outside the project
 
