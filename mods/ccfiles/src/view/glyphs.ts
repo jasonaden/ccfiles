@@ -47,13 +47,15 @@ export const KEY_TABLE: readonly { readonly keys: string; readonly meaning: stri
   { keys: 'j k', meaning: 'move down / up (arrows, PgUp/PgDn, wheel scroll)' },
   { keys: 'h l', meaning: 'collapse / expand a folder, group or fold' },
   { keys: 'd', meaning: 'detail of the selected file; d or q closes' },
-  { keys: 's', meaning: 'search paths; c clears the filter' },
+  { keys: 's', meaning: 'filter paths; c clears the filter' },
   { keys: HELP_KEY, meaning: 'help (this view)' },
   { keys: 'f', meaning: 'follow on / off' },
+  { keys: 'r', meaning: 'refresh git now' },
   { keys: 'y', meaning: 'copy the path' },
   { keys: 'o', meaning: 'sort Touched: recent, tokens, coverage' },
   { keys: 'a', meaning: 'viewpoint: main, then each subagent (once a subagent ran)' },
-  { keys: 'u', meaning: 'per-agent ≈ tokens and exact usage (once a subagent ran; also at the end of this help)' },
+  { keys: 'u', meaning: 'usage: the session’s exact API usage, and ≈ tokens and usage per agent' },
+  { keys: 'q', meaning: 'back from a detail, help or usage view' },
 ]
 
 /** Meta words and marks a row can show, as the help view explains them. */

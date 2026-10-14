@@ -43,7 +43,7 @@ written on every `--plugin-dir` load and are the authoritative API reference; tr
 | `ui.scroll` | `by`, `component`, `origin.kind` (`person` for wheel, arrows, PgUp/PgDn, Home/End on a focused pane). |
 | `ui.message` | `{ requestId, element, data, surface }`: what a Client module posted. |
 | `ui.focus`, `ui.close` | Pane focus (with `origin.kind`) and close, by request id. |
-| `command.run` | `e.presentation = { isFullscreen, columns }`. |
+| `command.run` | `e.presentation = { isFullscreen, columns }`, which describe the terminal. Under Claude Code Desktop there is none, and the types say a headless run reports `isFullscreen: false`, `columns: 80`. `$.session.surfaces()` tells the two apart (`terminal` is listed only under the REPL). |
 
 ## Tool results
 
@@ -74,7 +74,9 @@ CLAUDE.md files come back as `file` attachments. Claude Code chooses which reads
 ## Panes and drawing
 
 - A docked pane the user opens needs the fullscreen layout and at least 110 terminal columns (144 for one the user
-  did not open). `$.ui.open` answers `{ isPlaced, reason? }`.
+  did not open). On a remote surface (`desktop`) the app places the pane; an older desktop that places none
+  answers `isPlaced: false` with a reason. The `desktop` element table has `Client`, so the rows Client draws
+  there. `$.ui.open` answers `{ isPlaced, reason? }`.
 - `$.ui.invalidate('ui.render')` asks for a redraw. An idle pane is not redrawn unless something invalidates it.
 - Theme colour names (`text`, `inactive`, `suggestion`, `success`, `warning`, `error`, `diffAdded`, …) work as
   `color` values in header `Text` and inside a Client, in truecolor and 256 colours.

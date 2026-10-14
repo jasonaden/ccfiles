@@ -162,7 +162,7 @@ describe('header buttons', () => {
     await startSession($)
     await t.call($, { tool: 'Read', file_path: SMALL_PATH }, readResult(SMALL_PATH, SMALL))
     const ui = await $.ui.mount(pane(60, 16))
-    const helpShown = async () => (await screen(ui)).some((l) => /^help\b/.test(l))
+    const helpShown = async () => (await screen(ui)).some((l) => /^Help\b/.test(l))
     expect(await helpShown()).toBe(false)
     expect(await dimmed(ui, 'help')).toBe(true)
     await ui.press({ key: 'btn:help' })
@@ -245,8 +245,8 @@ describe('other agents’ reads stay out of the viewpoint’s totals', () => {
     const row = async (key: string) => lineText((await clientLines(ui)).find((l) => l.id === key) ?? { id: '', segs: [] })
     expect(await row(`f:${THEIRS}`)).toMatch(new RegExp(`b\\.ts +\\(≈${theirs}\\)$`))
     expect(await row(`f:${MINE}`)).toMatch(new RegExp(`a\\.ts +≈${mine}$`))
-    // The footer's `files ≈N` is main's own figure: sub/b.ts is not in it.
-    expect((await screen(ui)).at(-1)).toMatch(new RegExp(`files ≈${mine}\\b`))
+    // The footer's `≈N from files` is main's own figure: sub/b.ts is not in it.
+    expect((await screen(ui)).find((l) => l.includes('from files'))).toMatch(new RegExp(`≈${mine} from files`))
     // Collapse sub/: its rollup is main's sub/a.ts only, not the sum of both.
     const subKey = `d:${CWD}/sub`
     if (!(await row(subKey)).includes('▸')) await clickRow(ui, subKey)

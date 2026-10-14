@@ -500,7 +500,7 @@ describe('skill descriptions after /compact', () => {
     const d = descriptions(s)[0]!
     const text = detailLines(d, { root: CWD, home: null, git: null, themeHint: null, session: s }).map((l) => l.map((c) => c.text).join('')).join('\n')
     expect(text).toMatch(/loads +2 · skill_listing, compact/)
-    expect(text).toContain('⟳ 1× after /compact')
+    expect(text).toContain('⟳ reloaded once after /compact')
     expect(text).toContain('compact, restored')
     expect(text).toContain('in context now')
     expect(text).not.toContain('out of context')

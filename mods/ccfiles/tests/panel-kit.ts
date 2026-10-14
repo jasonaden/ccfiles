@@ -33,6 +33,8 @@ export function textOf(n: unknown): string {
   const node = n as Node
   // The hidden hotkey Buttons sit in a zero-width Box, which draws nothing.
   if (node.type === 'Box' && node.props?.width === 0) return ''
+  // A hover-revealed label (an icon's name) draws nothing until hovered.
+  if (node.type === 'Box' && node.props?.display === 'none') return ''
   const kids = node.children ?? []
   const hot = node.type === 'Button' && node.props?.hotkey ? `${node.props.hotkey}: ` : ''
   const gap = node.type === 'Box' && typeof node.props?.gap === 'number' ? ' '.repeat(node.props.gap) : ''
@@ -41,12 +43,15 @@ export function textOf(n: unknown): string {
   return ''
 }
 
-/** The drawn pane as lines: one per child of the root column, one per line the rows Client draws. */
+/** The drawn pane as lines: one per row of the root column (a nested column Box gives one per child), one per line the rows Client draws. */
 export async function screen(ui: { drawn: () => Promise<unknown> }): Promise<string[]> {
   const root = (await ui.drawn()) as Node
-  return (root.children ?? []).flatMap((c) => {
-    const n = c as Node
+  const lines = (n: Node): string[] => {
     if (n.type === 'Client') return ((n.props?.props as { lines?: RowLine[] })?.lines ?? []).map(lineText)
+    // Hidden (hover-revealed) and absolutely placed boxes draw no line of their own.
+    if (n.type === 'Box' && (n.props?.display === 'none' || n.props?.position === 'absolute')) return []
+    if (n.type === 'Box' && n.props?.flexDirection === 'column') return (n.children ?? []).flatMap((c) => lines(c as Node))
     return [textOf(n)]
-  })
+  }
+  return (root.children ?? []).flatMap((c) => lines(c as Node))
 }

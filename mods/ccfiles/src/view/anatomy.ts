@@ -12,6 +12,8 @@ import { cellWidth, takeCells, type Segment } from './text.ts'
 export type Part = { readonly text: string; readonly fg?: string; readonly bold?: boolean }
 
 export type RowParts = {
+  /** The column header and totals rows: one label across the gutter, badge and indent (`READ`), in place of both. */
+  readonly lead?: Part
   /** Cell 0: the viewpoint's state (meter or state glyph); null = blank. A two-cell glyph takes the badge cell too. */
   readonly gutter: Part | null
   /** Cell 1: the subagent badge; null = blank. */
@@ -30,7 +32,11 @@ export type RowParts = {
   readonly value: Part | null
 }
 
-export type Columns = { readonly git: number; readonly value: number }
+/**
+ * The right-hand columns' widths. `add` and `del` split the git column for `+N −N` rows: each figure right-aligned in
+ * its own sub-column, so `+83 −47` and `+812 −360` line up figure by figure; a word (`new`, `mod`) spans it all.
+ */
+export type Columns = { readonly git: number; readonly value: number; readonly add?: number; readonly del?: number }
 
 /** What a narrow panel keeps. */
 export type Fit = { readonly icons: boolean; readonly git: 'full' | 'short' | 'none' }
@@ -58,15 +64,31 @@ function gitText(git: readonly Part[], mode: Fit['git']): readonly Part[] {
 
 const joinedWidth = (parts: readonly Part[]) => (parts.length === 0 ? 0 : parts.reduce((n, p) => n + cellWidth(p.text), 0) + parts.length - 1)
 
+/** A row's git parts as the `+N` and `−N` figures, or null when they are anything else (a word, a count). */
+function figures(git: readonly Part[]): { add: Part; del: Part | null } | null {
+  const [a, d] = git
+  if (!a || !a.text.startsWith('+') || git.length > 2) return null
+  if (d && !d.text.startsWith('−')) return null
+  return { add: a, del: d ?? null }
+}
+
 /** The git and value column widths for a window of rows, in a fit mode. */
 export function columnWidths(rows: readonly RowParts[], mode: Fit['git'] = 'full'): Columns {
   let git = 0
   let value = 0
+  let add = 0
+  let del = 0
   for (const r of rows) {
-    git = Math.max(git, joinedWidth(gitText(r.git, mode)))
+    const parts = gitText(r.git, mode)
+    const f = figures(parts)
+    if (f) {
+      add = Math.max(add, cellWidth(f.add.text))
+      if (f.del) del = Math.max(del, cellWidth(f.del.text))
+    } else git = Math.max(git, joinedWidth(parts))
     value = Math.max(value, r.value ? cellWidth(r.value.text) : 0)
   }
-  return { git, value }
+  const pair = add > 0 ? add + (del > 0 ? 1 + del : 0) : 0
+  return { git: Math.max(git, pair), value, ...(add > 0 ? { add, del } : {}) }
 }
 
 /**
@@ -95,20 +117,35 @@ function nameRoom(r: RowParts, width: number, cols: Columns, fit: Fit): number {
 }
 
 /** Lays out one row exactly `width` cells wide. */
-export function layoutRow(r: RowParts, width: number, cols: Columns, fit: Fit = { icons: true, git: 'full' }): Segment[] {
+/**
+ * Lays out one row exactly `width` cells wide. `fluid` (desktop): the name is never cut here and the padding after it
+ * is always there, however narrow; the surface's proportional text is narrower than its cells, so its name Box
+ * shrinks (with an ellipsis) only when the row truly runs out of room.
+ */
+export function layoutRow(r: RowParts, width: number, cols: Columns, fit: Fit = { icons: true, git: 'full' }, fluid = false): Segment[] {
   const out: Segment[] = []
-  // Gutter: state, space, badge, space. A two-cell state glyph (`⚡`) takes the state cell and its space.
-  const gutterW = r.gutter ? cellWidth(r.gutter.text) : 0
-  out.push(r.gutter ? { ...seg(r.gutter), text: r.gutter.text + (gutterW >= 2 ? '' : ' ') } : { text: '  ' })
-  out.push(r.badge ? { ...seg(r.badge), ...(r.badge.bg ? { bg: r.badge.bg } : {}) } : { text: ' ' })
-  out.push({ text: ' '.repeat(1 + INDENT * r.depth) })
-  out.push(r.caret ? { ...seg(r.caret), text: r.caret.text + ' ' } : { text: '  ' })
-  // The icon and its two spaces; a two-cell icon (plain `⚡`) keeps one.
-  if (fit.icons) out.push(r.icon ? { ...seg(r.icon), text: r.icon.text + ' '.repeat(ICON - cellWidth(r.icon.text)) } : { text: ' '.repeat(ICON) })
+  if (r.lead) {
+    // One run across the gutter, the indent and both slots, so a label wider than the gutter in a proportional font
+    // still has room before the name column.
+    const span = GUTTER + INDENT * r.depth + SLOT + (fit.icons ? ICON : 0)
+    const lead = takeCells(r.lead.text, span - 1)
+    out.push({ ...seg(r.lead), text: lead + ' '.repeat(span - cellWidth(lead)) })
+  } else {
+    // Gutter: state, space, badge, space. A two-cell state glyph (`⚡`) takes the state cell and its space.
+    const gutterW = r.gutter ? cellWidth(r.gutter.text) : 0
+    out.push(r.gutter ? { ...seg(r.gutter), text: r.gutter.text + (gutterW >= 2 ? '' : ' ') } : { text: '  ' })
+    out.push(r.badge ? { ...seg(r.badge), ...(r.badge.bg ? { bg: r.badge.bg } : {}) } : { text: ' ' })
+    out.push({ text: ' '.repeat(1 + INDENT * r.depth) })
+  }
+  if (!r.lead) {
+    out.push(r.caret ? { ...seg(r.caret), text: r.caret.text + ' ' } : { text: '  ' })
+    // The icon and its two spaces; a two-cell icon (plain `⚡`) keeps one.
+    if (fit.icons) out.push(r.icon ? { ...seg(r.icon), text: r.icon.text + ' '.repeat(ICON - cellWidth(r.icon.text)) } : { text: ' '.repeat(ICON) })
+  }
 
   const room = Math.max(1, nameRoom(r, width, cols, fit))
   const nameW = cellWidth(r.name.text)
-  const name = nameW <= room ? r.name.text : takeCells(r.name.text, room - 1) + '…'
+  const name = fluid || nameW <= room ? r.name.text : takeCells(r.name.text, room - 1) + '…'
   out.push({ ...seg(r.name), text: name, name: true, ...(r.name.strike ? { strike: true } : {}), ...(r.name.underline ? { underline: true } : {}) })
   for (const m of r.marks) out.push({ text: ' ' }, seg(m))
 
@@ -116,16 +153,28 @@ export function layoutRow(r: RowParts, width: number, cols: Columns, fit: Fit = 
   const git = gitText(r.git, fit.git)
   const used = out.reduce((n, s) => n + cellWidth(s.text), 0)
   const right = (cols.git > 0 ? cols.git + GAP : 0) + (cols.value > 0 ? cols.value + GAP : 0)
-  out.push({ text: ' '.repeat(Math.max(0, width - used - right)) })
+  out.push({ text: ' '.repeat(Math.max(0, width - used - right)), filler: true })
   if (cols.git > 0) {
-    out.push({ text: ' '.repeat(GAP + cols.git - joinedWidth(git)) })
-    git.forEach((g, i) => out.push(...(i > 0 ? [{ text: ' ' }] : []), seg(g)))
+    const f = figures(git)
+    if (f && cols.add) {
+      // `+N` right-aligned in the add sub-column, `−N` in the del sub-column, both at the git column's right end.
+      const del = cols.del ?? 0
+      out.push({ text: ' '.repeat(GAP + cols.git - cols.add - (del > 0 ? 1 + del : 0)) })
+      out.push({ text: ' '.repeat(cols.add - cellWidth(f.add.text)) }, { ...seg(f.add), right: true })
+      if (del > 0) {
+        out.push({ text: ' ' }, { text: ' '.repeat(del - (f.del ? cellWidth(f.del.text) : 0)) })
+        if (f.del) out.push({ ...seg(f.del), right: true })
+      }
+    } else {
+      out.push({ text: ' '.repeat(GAP + cols.git - joinedWidth(git)) })
+      git.forEach((g, i) => out.push(...(i > 0 ? [{ text: ' ' }] : []), { ...seg(g), right: true }))
+    }
   }
   if (cols.value > 0) {
     out.push({ text: ' '.repeat(GAP + cols.value - (r.value ? cellWidth(r.value.text) : 0)) })
-    if (r.value) out.push(seg(r.value))
+    if (r.value) out.push({ ...seg(r.value), right: true })
   }
-  return clip(out, width)
+  return fluid ? out.filter((s) => s.text !== '' || s.filler) : clip(out, width)
 }
 
 function seg(p: Part): Segment {
@@ -153,9 +202,19 @@ function clip(segs: Segment[], width: number): Segment[] {
   return out.filter((s) => s.text !== '')
 }
 
-/** Lays out a visible window: one fit and one set of column widths for every row, so the columns line up. */
-export function layoutWindow(rows: readonly RowParts[], width: number): Segment[][] {
+/**
+ * Lays out a visible window: one fit and one set of column widths for every row, so the columns line up. `head`
+ * rows (the column header, the totals) take the same columns and widen them when their labels need it.
+ */
+export function layoutWindow(rows: readonly RowParts[], width: number, head: readonly RowParts[] = [], o: { headRoom?: number; fluid?: boolean } = {}): Segment[][] {
   const fit = fitFor(rows, width)
-  const cols = columnWidths(rows, fit.git)
-  return rows.map((r) => layoutRow(r, width, cols, fit))
+  const own = columnWidths(rows, fit.git)
+  const heads = columnWidths(head, fit.git)
+  // `headRoom` > 1 where text is proportional: capitals in the header run past one cell each.
+  const room = (n: number) => Math.ceil(n * (o.headRoom ?? 1))
+  const add = Math.max(own.add ?? 0, heads.add ?? 0)
+  const del = Math.max(own.del ?? 0, heads.del ?? 0)
+  const pair = add > 0 ? add + (del > 0 ? 1 + del : 0) : 0
+  const cols = { git: Math.max(own.git, room(heads.git), pair), value: Math.max(own.value, room(heads.value)), ...(add > 0 ? { add, del } : {}) }
+  return [...head, ...rows].map((r) => layoutRow(r, width, cols, fit, o.fluid))
 }

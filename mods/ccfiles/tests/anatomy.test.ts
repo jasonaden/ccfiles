@@ -110,3 +110,21 @@ describe('width never drifts', () => {
       }
   })
 })
+
+describe('the git column splits +N and −N into sub-columns', () => {
+  test('added figures share a right edge, removed figures share another; a word ends at the column’s edge', () => {
+    const rows = [
+      row({ name: 'docs', git: [{ text: '+83' }, { text: '−47' }], value: { text: '≈3.9k' } }),
+      row({ name: 'mods', git: [{ text: '+812' }, { text: '−360' }], value: { text: '≈29k' } }),
+      row({ name: 'a.ts', git: [{ text: '+5' }, { text: '−1234' }] }),
+      row({ name: 'b.ts', git: [{ text: 'new' }] }),
+    ]
+    const lines = layoutWindow(rows, 60).map((segs) => segs.map((s) => s.text).join(''))
+    const end = (l: string, figure: string) => l.indexOf(figure) + figure.length
+    // `+` figures end in one column, `−` figures in another, whatever the other figure's width.
+    expect(new Set([end(lines[0]!, '+83'), end(lines[1]!, '+812'), end(lines[2]!, '+5')]).size).toBe(1)
+    expect(new Set([end(lines[0]!, '−47'), end(lines[1]!, '−360'), end(lines[2]!, '−1234')]).size).toBe(1)
+    expect(end(lines[3]!, 'new')).toBe(end(lines[0]!, '−47'))
+    for (const l of lines) expect(cellWidth(l)).toBe(60)
+  })
+})

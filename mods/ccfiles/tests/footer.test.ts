@@ -3,7 +3,7 @@ import { makeEvent, type LogRecord } from '../src/model.ts'
 import { replay } from '../src/reducer.ts'
 import { footerParts } from '../src/summary.ts'
 import { unmarkedTokenFigures } from '../src/tokens.ts'
-import { detailLines } from '../src/view/detail.ts'
+import { agentLines } from '../src/view/detail.ts'
 
 const usage = (agentId: string | null, input: number, cacheRead: number, cacheCreation: number, output: number): LogRecord => ({
   t: 'usage',
@@ -41,15 +41,15 @@ describe('footer', () => {
 
   // The one-line footer is laid out by src/view/header.ts footerLine and
   // drawn by the panel (tests/header.test.ts, tests/panel.test.ts). footerParts stays for the log line.
-  test('the full exact values and the marker legend are in the detail view', () => {
+  test('the full exact values and the marker legend are in the usage view (u)', () => {
     const s = replay(SESSION)
-    const text = detailLines(s.files.get('/tmp/fv/big.md')!, { root: '/tmp/fv', home: null, git: null, themeHint: null, session: s })
+    const text = agentLines(s)
       .map((l) => l.map((c) => c.text).join(''))
       .join('\n')
     expect(text).toMatch(/context +65,590 tok \(exact\)/)
     expect(text).toMatch(/billed +∑ 187,916 tok \(exact\) incl\. cache re-reads/)
     expect(text).toMatch(/out +362 tok \(exact\)/)
-    expect(text).toContain('≈ estimated (chars ÷ 4) · = exact (API usage)')
+    expect(text).toContain('≈ estimated (chars ÷ 4) · = exact (API usage')
     expect(unmarkedTokenFigures(text)).toEqual([])
   })
 })

@@ -64,8 +64,9 @@ describe('git and commits', () => {
     // Modified keeps +N −N, no bare M.
     // Git meta sits in its own column before the right column (blank here: nothing read).
     expect(await row('small.ts')).toMatch(/\+3 −1 *$/)
-    // The branch row reads `⎇  main ↑2` left and `+3 −1 · 1 mod` right.
-    expect(await screen(ui)).toContainEqual(expect.stringMatching(/^⎇  main ↑2 +\+3 −1 · 1 mod$/))
+    // The branch row reads `⎇  main ↑2` left and `1 mod` right; the lines total sits in the totals row's git column.
+    expect(await screen(ui)).toContainEqual(expect.stringMatching(/^⎇  main ↑2 +1 mod$/))
+    expect(await screen(ui)).toContainEqual(expect.stringMatching(/^ +All files · \d+ touched +\+3 −1 *(≈\S+)?$/))
 
     // A Bash write: the status scan after the call finds the new file.
     repo.status = ' M small.ts\0?? out.txt\0'

@@ -25,8 +25,11 @@ import type { EventKind, FvEvent } from '../src/model.ts'
 import { THEME_HINT, buildPalette, colorDepth, defaultPalette, mix, parseConfig, resolveTheme, themePalette, type ColorEnv, type Palette } from '../src/palette.ts'
 import { instructionSummaryLine } from '../src/summary.ts'
 import { ALL, MAIN, agentLabel, agentOrder, agentState } from '../src/agents.ts'
-import { agentLines, detailLines, helpView } from '../src/view/detail.ts'
-import { clientSegs, lineSegments, rowSegments, shimmerBands, windowLines, type Look } from '../src/view/draw.ts'
+import { agentBlocks, detailBlocks, helpBlocks } from '../src/view/detail.ts'
+import { blockLines } from '../src/view/blocks.ts'
+import { drawBlocks, type BlockElements } from '../src/view/blocks-draw.ts'
+import { clientSegs, lineSegments, listLines, rowSegments, shimmerBands, type ListHead, type Look } from '../src/view/draw.ts'
+import { GLYPH_PX, bar as svgBar, type Vector } from '../src/view/svg.ts'
 import { FC_LIST_ARGV, glyphsWithoutProbe, chooseGlyphs, hasNerdFontFile, libraryFontsDir, parseFcList, sshFromEnv, type GlyphSetting } from '../src/view/detect.ts'
 import type { GlyphSet } from '../src/view/icons.ts'
 import type { ValueMode } from '../src/view/values.ts'
@@ -56,14 +59,14 @@ import {
 import { LIT_MS, MIN_TAG_MS, displayPath, isClaudeCodeLoad, rowsFor, type Row, type ViewContext } from '../src/view/rows.ts'
 import { HELP_KEY } from '../src/view/glyphs.ts'
 import { agentInfos, agentList, agentListNameWidth, agentListRowSegments, agentsLine, fileBadge, nextViewpoint, type AgentSeg } from '../src/view/agentsline.ts'
-import { branchRow, footerLine, tabStrip, type Piece } from '../src/view/header.ts'
+import { branchRow, footerBlock, gitCounts, tabStrip, tabWidth, type KeyHint, type Piece } from '../src/view/header.ts'
 import { icon } from '../src/view/icons.ts'
 import { folderTimes, nextValueMode } from '../src/view/values.ts'
 import { basename } from '../src/paths.ts'
 import { totals } from '../src/summary.ts'
 import { PROJECT_MARKERS, additionalDirectories, breadcrumb, fitBreadcrumb, focusRepo, gitDirsToResolve, isUnder, parentFocus, parseRevParse, revParseArgv, sectionRepo, sections, settingsFiles, type RootContext, type Section } from '../src/roots.ts'
 import { dirname, rootSpelling } from '../src/paths.ts'
-import { fitRow, type Segment } from '../src/view/text.ts'
+import { cellWidth, fitRow, truncateMiddle, type Segment } from '../src/view/text.ts'
 import { fmtEstTokens, fmtExactTokens } from '../src/tokens.ts'
 import type { SessionState } from '../src/model.ts'
 
@@ -317,13 +320,15 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('command.run', { command: 'ccfiles' }, async ($, e) => {
-    // A docked pane needs the fullscreen layout and ≥110 columns; never opens on its own.
-    const why = openRefusal(e.presentation)
+    // On a terminal a docked pane needs the fullscreen layout and ≥110 columns; never opens on its own.
+    // Desktop runs Claude Code with no terminal: `presentation` then describes none, and the app places the pane.
+    const onTerminal = (await $.session.surfaces().catch((): readonly string[] => [])).includes('terminal')
+    const why = onTerminal ? openRefusal(e.presentation) : null
     if (why) return { text: why }
     const r = await $.ui.open({ id: PANE_ID, title: PANE_TITLE, focus: true })
     view.open = true
     void requestGit($, view, 'other')
-    return { text: r.isPlaced ? 'panel open: 1 Tree · 2 Touched · 3 Instructions (keys: j/k move, h/l fold, d detail, s search, g help, f follow)' : `panel not placed${r.reason ? ` (${r.reason})` : ''}` }
+    return { text: r.isPlaced ? 'panel open: 1 Tree · 2 Touched · 3 Instructions (keys: j/k move, h/l fold, d detail, s filter, g help, f follow)' : `panel not placed${r.reason ? ` (${r.reason})` : ''}` }
   })
 
   // A folder added with /add-dir roots the outside files under it (Claude Code fires this event for /add-dir).
@@ -1084,7 +1089,7 @@ type El = ElementTable<'terminal'>
 type PaneInput = Extract<RenderInput<'Pane'>, { surface: 'terminal' }>
 
 async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
-  const els = $.ui.resolve(e) as Partial<El> & Pick<El, 'Box' | 'Text' | 'Button'>
+  const els = $.ui.resolve(e) as Partial<El> & Partial<Pick<ElementTable<'desktop'>, 'Svg'>> & Pick<El, 'Box' | 'Text' | 'Button'>
   const { Box, Text, Button } = els
   const props = (e as PaneInput).props
   const width = Math.max(20, props.bodyColumns)
@@ -1107,8 +1112,15 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
   const rows = currentRows(view, now)
   syncSelection(view, rows)
 
+  // Desktop and VS Code draw Text in a proportional font, but count a Box's width in cells: there each laid-out run
+  // sits in a Box of its own cells, so columns padded for the terminal still line up.
+  const grid = e.surface !== 'terminal'
+  // Where Svg draws (desktop), the gutter glyphs are vectors: one size whatever font the symbols fall back to.
+  const vectorGlyphs = grid && Boolean(els.Svg) && Boolean(els.Client)
+  const inCells = (t: string, el: RenderElement, right = false, bg?: string) =>
+    grid ? Box({ width: cellWidth(t), flexShrink: 0, height: 1, overflow: 'hidden', flexDirection: 'row', ...(right ? { justifyContent: 'flex-end' } : {}), ...(bg ? { backgroundColor: bg } : {}), children: [el] }) : el
   const text = (segs: readonly Segment[]) =>
-    segs.map((s) => Text({ ...(s.fg ? { color: s.fg } : {}), ...((s.bg ?? panelBg) ? { backgroundColor: s.bg ?? panelBg } : {}), ...(s.bold ? { bold: true } : {}), ...(s.underline ? { underline: true } : {}), wrap: 'truncate', children: [s.text] }))
+    segs.map((s) => inCells(s.text, Text({ ...(s.fg ? { color: s.fg } : {}), ...((s.bg ?? panelBg) ? { backgroundColor: s.bg ?? panelBg } : {}), ...(s.bold ? { bold: true } : {}), ...(s.underline ? { underline: true } : {}), wrap: 'truncate', children: [s.text] }), s.right, s.bg ?? panelBg))
   const line = (key: string, segs: readonly Segment[]) => Box({ key, flexDirection: 'row', height: 1, children: text(segs) })
   /**
    * Keeps the keyboard in the pane after its own presses (B2): the ring goes to the selected row, or to a key
@@ -1132,9 +1144,18 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
   const ctext = (t: string, color: string, o: { bold?: boolean; underline?: boolean; bg?: string } = {}) =>
     Text({ color, ...(o.bold ? { bold: true } : {}), ...(o.underline ? { underline: true } : {}), ...((o.bg ?? panelBg) ? { backgroundColor: o.bg ?? panelBg } : {}), wrap: 'truncate', children: [t] })
   const pieces = (ps: readonly Piece[]) => ps.map((x) => ctext(x.text, pal.colors[x.color], { bold: x.bold }))
-  // The root breadcrumb, then one-glyph plain Buttons (never `x: label`), hover from the surface.
-  const iconButton = (key: string, glyph: string, onPress: () => void, o: { dim?: boolean } = {}) =>
-    Button({ key: `btn:${key}`, plain: true, ...(o.dim ? { dimColor: true } : {}), hover: { backgroundColor: pal.colors.selection, color: pal.colors.text }, children: [Text({ color: pal.colors.muted, children: [` ${glyph} `] })], onPress })
+  // The root breadcrumb, then one-glyph plain Buttons (never `x: label`). Each icon is its own hover group, so only
+  // the one under the pointer lights, and that group reveals the icon's name just below it (there is no tooltip prop).
+  const iconButton = (key: string, glyph: string, name: string, onPress: () => void, o: { dim?: boolean } = {}) => {
+    const scope = `ccfiles:btn:${key}`
+    return Box({
+      flexDirection: 'row',
+      children: [
+        Button({ key: `btn:${key}`, plain: true, ...(o.dim ? { dimColor: true } : {}), hover: { scope, backgroundColor: pal.colors.selection, color: pal.colors.text }, children: [Text({ color: pal.colors.muted, children: [` ${glyph} `] })], onPress }),
+        Box({ position: 'absolute', top: 1, right: 0, display: 'none', hover: { scope, display: 'flex' }, backgroundColor: pal.colors.selection, paddingX: 1, children: [Text({ color: pal.colors.text, wrap: 'truncate', children: [name] })] }),
+      ],
+    })
+  }
   const helpOpen = panel.detail === HELP
   // The breadcrumb names the focus (`acme-web-app ▸ packages`); the buttons (7 × 3 cells) keep their room.
   const crumb = fitBreadcrumb(breadcrumb(panel.focus ?? root, root, view.store.home ?? '', viewContext(view, now).outside?.map((o) => o.root) ?? []), Math.max(8, width - 22))
@@ -1146,23 +1167,24 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
       ...(panelBg ? { backgroundColor: panelBg } : {}),
       children: [
         Box({ flexGrow: 1, flexShrink: 1, overflow: 'hidden', children: [ctext(crumb, pal.colors.accent, { bold: true })] }),
-        iconButton('help', '?', act(() => (helpOpen ? closeDetail(panel) : openHelp(panel))), { dim: !helpOpen }),
-        iconButton('up', '↑', act(() => {
+        iconButton('help', '?', 'Help (g)', act(() => (helpOpen ? closeDetail(panel) : openHelp(panel))), { dim: !helpOpen }),
+        iconButton('up', '↑', 'Parent folder', act(() => {
           const up = parentFocus(panel.focus ?? root)
           if (up !== null) setFocus(panel, up, root)
         })),
-        iconButton('home', '⌂', act(() => setFocus(panel, null, root)), { dim: panel.focus === null }),
-        iconButton('refresh', '↻', () => void requestGit($, view, 'other')),
-        iconButton('follow', '◉', act(() => { panel.follow = !panel.follow }), { dim: !panel.follow }),
-        iconButton('column', 'Σ', act(() => { view.value = nextValueMode(view.value) })),
-        iconButton('collapse', panel.collapsed ? '⊞' : '⊟', act(() => toggleCollapse(panel, changedPaths(view), root))),
+        iconButton('home', '⌂', 'Back to the session root', act(() => setFocus(panel, null, root)), { dim: panel.focus === null }),
+        iconButton('refresh', '↻', 'Refresh git now (r)', () => void requestGit($, view, 'other')),
+        iconButton('follow', '◉', panel.follow ? 'Following Claude (f pauses)' : 'Follow Claude (f)', act(() => { panel.follow = !panel.follow }), { dim: !panel.follow }),
+        iconButton('column', 'Σ', 'Right column: tokens, lines, date, size', act(() => { view.value = nextValueMode(view.value) })),
+        iconButton('collapse', panel.collapsed ? '⊞' : '⊟', panel.collapsed ? 'Back to the default view' : 'Collapse every folder', act(() => toggleCollapse(panel, changedPaths(view), root))),
       ],
     }),
   )
   // The branch row, its own line (no row outside a git repo).
   const bgit = branchGit(view)
   if (bgit) {
-    const br = branchRow(bgit, width, { branchGlyph: icon('branch', view.glyphs.set), upstream: bgit.upstream ?? null })
+    // Tree and Touched total the git lines in the column under the rows' own; the branch row keeps the file counts.
+    const br = branchRow(bgit, width, { branchGlyph: icon('branch', view.glyphs.set), upstream: bgit.upstream ?? null, lines: !(els.Client && panel.tab !== 'instructions' && panel.detail === null) })
     header.push(
       Box({
         key: 'branch',
@@ -1182,32 +1204,46 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
     if (f.lastAction !== null || f.instruction !== null || (f.via?.length ?? 0) > 0) counts.touched++
     if (f.instruction !== null) counts.instructions++
   }
-  const strip = tabStrip(counts, width, { full: panel.query ? `/ “${panel.query}”` : '/ search', glyph: '/' })
-  const tabEls = strip.tabs.map((t) => {
-    const on = t.tab === panel.tab && !helpOpen
-    const bg = on ? pal.colors.selection : undefined
-    return Button({
-      key: `tab:${t.tab}`,
+  // An open view takes the filter field's place (the filter does not apply there): its own tab, sized to what is left.
+  const viewName = panel.detail === null ? null : panel.detail === HELP ? 'Help' : panel.detail === AGENTS ? 'Usage' : basename(panel.detail)
+  const strip = tabStrip(counts, viewName === null ? width : width - 9, { full: panel.query ? `filter: ${panel.query}` : 'filter files (s)', glyph: 's' })
+  // The tabs read as tabs: on the terminal the active one in reverse video; on desktop a segmented control (a track
+  // and the active tab's fill, as Box backgrounds). An open detail, help or usage view is a tab of its own at the end,
+  // active, with a × that closes it, so the strip always says where you are.
+  const tabButton = (key: string, label: string, count: number | null, on: boolean, onPress: () => void) => {
+    const bg = on && !vectorGlyphs ? pal.colors.accent : undefined
+    const fg = on ? (vectorGlyphs ? pal.colors.text : pal.background) : pal.colors.muted
+    const button = Button({
+      key,
       plain: true,
-      hover: { backgroundColor: pal.colors.selection },
-      onPress: act(() => { panel.tab = t.tab; closeDetail(panel) }),
+      hover: { scope: `ccfiles:${key}`, ...(on ? {} : { color: pal.colors.text }) },
+      onPress,
       children: [
-        ctext(' ', pal.colors.text, { ...(bg ? { bg } : {}) }),
-        ctext(t.label, on ? pal.colors.accent : pal.colors.text, { bold: on, underline: on, ...(bg ? { bg } : {}) }),
-        ...(t.count !== null ? [ctext(` ${t.count}`, on ? pal.colors.text : pal.colors.muted, { ...(bg ? { bg } : {}) })] : []),
-        ctext(' ', pal.colors.text, { ...(bg ? { bg } : {}) }),
+        ctext(' ', fg, { ...(bg ? { bg } : {}) }),
+        ctext(label, fg, { bold: on, ...(bg ? { bg } : {}) }),
+        ...(count !== null ? [ctext(` ${count}`, on ? fg : pal.colors.muted, { ...(bg ? { bg } : {}) })] : []),
+        ctext(' ', fg, { ...(bg ? { bg } : {}) }),
       ],
     })
-  })
+    // Desktop: the active tab's fill leans to the accent, so it stands out from the track's grey.
+    return vectorGlyphs && on ? Box({ flexDirection: 'row', backgroundColor: mix(pal.background, pal.colors.accent, 0.32), children: [button] }) : button
+  }
+  const tabEls = strip.tabs.map((t) => tabButton(`tab:${t.tab}`, t.label, t.count, t.tab === panel.tab && panel.detail === null, act(() => { panel.tab = t.tab; closeDetail(panel) })))
+  if (viewName !== null) {
+    // The tabs' cells, a space, then ` name × `: the name gives way in the middle.
+    const room = width - strip.tabs.reduce((n, t) => n + tabWidth(t), 0) - 1 - 4
+    tabEls.push(ctext(' ', pal.colors.muted), tabButton('tab:view', `${truncateMiddle(viewName, Math.max(1, room))} ×`, null, true, act(() => closeDetail(panel))))
+  }
   {
-    const search = els.Input
+    const search = els.Input && viewName === null
       ? els.Input({
         key: 'search',
         // The search control at the strip's right end; `s` focuses it. The field shows the person's
         // text while they type and empties after Enter; the placeholder names the active filter.
         placeholder: strip.search,
         value: view.searchTyping ? panel.query : '',
-        submitLabel: 'jump',
+        // Typing filters the list; Enter selects the first match.
+        submitLabel: 'select',
         onInput: (v) => {
           view.searchTyping = true
           panel.query = v
@@ -1234,7 +1270,10 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
         flexDirection: 'row',
         height: 1,
         ...(panelBg ? { backgroundColor: panelBg } : {}),
-        children: [...tabEls, Box({ flexGrow: 1, flexShrink: 1, overflow: 'hidden', justifyContent: 'flex-end', flexDirection: 'row', children: search ? [search] : [] })],
+        children: [
+          Box({ flexDirection: 'row', ...(vectorGlyphs ? { backgroundColor: mix(pal.background, pal.colors.selection, 0.45) } : {}), children: tabEls }),
+          Box({ flexGrow: 1, flexShrink: 1, overflow: 'hidden', justifyContent: 'flex-end', flexDirection: 'row', children: search ? [search] : [] }),
+        ],
       }),
     )
   }
@@ -1255,7 +1294,7 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
       if (key) return Button({ key: `agents:${key}:${i}`, plain: true, children: [t], onPress: act(() => { panel.agent = key; closeDetail(panel) }) })
       return t
     }
-    header.push(Box({ key: 'agents', flexDirection: 'row', height: 1, ...(panelBg ? { backgroundColor: panelBg } : {}), children: aline.map((sg, i) => segEl(sg, i)) }))
+    header.push(Box({ key: 'agents', flexDirection: 'row', height: 1, ...(panelBg ? { backgroundColor: panelBg } : {}), children: aline.map((sg, i) => inCells(sg.text, segEl(sg, i))) }))
     if (panel.agentsOpen) {
       const list = agentList(infos, { bodyHeight: Math.max(3, height - header.length - 1), scroll: panel.agentsScroll, open: panel.agentGroups, viewpoint })
       panel.agentsScroll = list.offset
@@ -1267,7 +1306,7 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
       if (list.above) more('agentmore:up', `▴ ${list.offset} more`, -page)
       list.rows.forEach((r, ri) => {
         const onGroup = r.kind === 'group' ? () => { if (!panel.agentGroups.delete(r.type)) panel.agentGroups.add(r.type) } : undefined
-        header.push(Box({ key: `agentrow:${ri}`, flexDirection: 'row', height: 1, ...(panelBg ? { backgroundColor: panelBg } : {}), children: [ctext('  ', pal.colors.muted), ...agentListRowSegments(r, width - 2, { name: nameCol }).map((sg, i) => segEl(sg, i, onGroup))] }))
+        header.push(Box({ key: `agentrow:${ri}`, flexDirection: 'row', height: 1, ...(panelBg ? { backgroundColor: panelBg } : {}), children: [inCells('  ', ctext('  ', pal.colors.muted)), ...agentListRowSegments(r, width - 2, { name: nameCol }).map((sg, i) => inCells(sg.text, segEl(sg, i, onGroup)))] }))
       })
       if (list.below) more('agentmore:down', `▾ ${list.total - list.offset - list.rows.length} more`, page)
     }
@@ -1280,11 +1319,11 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
   const press = new Map<string, OnPress>(
     panel.detail !== null
       ? [
-          ['d', () => void closeDetailToPrompt($, view)],
+          ['d', (press) => void closeDetailToPrompt($, view, press.surface)],
           ['j', act(() => scroll(panel, 1, 0, 0, false))],
           ['k', act(() => scroll(panel, -1, 0, 0, false))],
           ['y', (press) => void copyPath(press).catch(() => {})],
-          ['q', () => void closeDetailToPrompt($, view)],
+          ['q', (press) => void closeDetailToPrompt($, view, press.surface)],
           // `g` closes the help view; from a file's detail it opens help.
           [HELP_KEY, act(() => (panel.detail === HELP ? closeDetail(panel) : openHelp(panel)))],
         ]
@@ -1295,13 +1334,14 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
           ['l', act((r) => expand(panel, r))],
           ['d', act((r) => { const row = selectedRow(panel, r); if (row?.kind === 'file' && row.path) openDetail(panel, row.path) })],
           ['s', () => void $.ui.focus({ requestId: PANE_ID, key: 'search' }).catch(() => {})],
+          ['r', () => void requestGit($, view, 'other')],
           [HELP_KEY, act(() => openHelp(panel))],
           ['f', act(() => { panel.follow = !panel.follow })],
           ['y', (press) => void copyPath(press).catch(() => {})],
           ['o', act(() => { panel.sort = nextSort(panel.sort) })],
           ['c', act(() => { panel.query = '' })],
           ['a', act(() => { if (view.store.state.registry.size > 0) panel.agent = nextViewpoint(agentMode(view), agentOrder(view.store.state)) })],
-          ['u', act(() => { if (view.store.state.registry.size > 0) openAgents(panel) })],
+          ['u', act(() => openAgents(panel))],
         ],
   )
   // Tabs by key in every view: hidden hotkeys, like the rest.
@@ -1311,17 +1351,21 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
     const path = panel.detail ?? selectedRow(panel, currentRows(view, t))?.path ?? null
     if (path && path.startsWith('/')) await $.ui.copy({ text: path, surface: press.surface as never }).catch(() => undefined)
   }
-  // One footer line, `context Nk exact · files ≈Nk` and the latest activity chip.
-  const foot = footerLine(
+  // The footer: whose context this is and its exact size, the share of it that came from files (a bar), and the keys
+  // this view takes with the latest activity. In a subagent viewpoint both figures are that agent's.
+  const vp = agentMode(view)
+  const foot = footerBlock(
     {
-      // In a subagent viewpoint both figures are that agent's (its latest request; its files in context).
-      context: footContext(state, agentMode(view)),
-      files: fmtEstTokens(totals(vs).contextTokens).replace(/ tok$/, ''),
+      // The context figure is main's in the all-agents view too: there is no one context for several agents.
+      who: vp === MAIN || vp === ALL ? 'main agent' : agentLabel(state, vp),
+      context: footContextTokens(state, vp),
+      files: totals(vs).contextTokens,
       chip: activityChip(view, root),
+      keys: footerKeys(panel.detail, state.registry.size > 0),
     },
     width,
   )
-  const footerHeight = 1
+  const footerHeight = foot.share === null ? 2 : 3
   const listHeight = Math.max(1, height - header.length - footerHeight)
   view.list = { total: rows.length, height: listHeight }
 
@@ -1330,15 +1374,22 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
   const onScreen: string[] = []
   let byClient = false
   const detail = panel.detail !== null ? viewState(view).files.get(panel.detail) : undefined
-  const detailText =
+  const detailBlocksNow =
     panel.detail === HELP
-      ? helpView(state, { palette: view.paletteMode })
+      ? helpBlocks({ palette: view.paletteMode })
       : panel.detail === AGENTS
-        ? agentLines(state)
+        ? agentBlocks(state)
       : detail
-        ? detailLines(detail, { root, home: view.store.home, git: view.git, themeHint: view.look.hint, otherAgents: view.store.state.otherAgents.agents, session: view.store.state })
+        ? detailBlocks(detail, { root, home: view.store.home, git: view.git, themeHint: view.look.hint, otherAgents: view.store.state.otherAgents.agents, session: view.store.state })
         : null
-  if (detailText) {
+  const detailText = detailBlocksNow && !(vectorGlyphs && els.Svg) ? blockLines(detailBlocksNow, width) : null
+  if (detailBlocksNow && vectorGlyphs && els.Svg) {
+    // Desktop: the blocks as boxes, text and vectors, scrolled a block at a time.
+    const off = Math.min(panel.detailOffset, Math.max(0, detailBlocksNow.length - 1))
+    panel.detailOffset = off
+    view.list = { total: detailBlocksNow.length, height: 1 }
+    body.push(Box({ key: 'detail', flexDirection: 'column', height: listHeight, overflow: 'hidden', children: drawBlocks({ Box, Text, Svg: els.Svg } as BlockElements, detailBlocksNow, pal, off) }))
+  } else if (detailText) {
     const lines = detailText.flatMap((l) => lineSegments(l, width, pal))
     const off = Math.min(panel.detailOffset, Math.max(0, lines.length - listHeight))
     panel.detailOffset = off
@@ -1347,15 +1398,29 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
     if (els.Client) {
       // The same Client as the list: it stays mounted, so the keys a click gave it keep working (d, j/k, y).
       const out: RowLine[] = shown.map((l) => ({ id: '', segs: clientSegs(l) }))
-      while (out.length < listHeight) out.push({ id: '', segs: [{ t: ' '.repeat(width) }] })
+      while (out.length < listHeight) out.push({ id: '', segs: [{ t: ' '.repeat(width), w: width }] })
       byClient = true
-      body.push(els.Client({ key: 'rows', module: './rows.ts', props: { lines: out, hoverBg: mix(pal.background, pal.colors.selection, 0.6), ...(panelBg ? { bg: panelBg } : {}), bands: shimmerBands(hexPal) } satisfies RowsProps, width, height: listHeight }))
+      body.push(els.Client({ key: 'rows', module: './rows.ts', props: { lines: out, hoverBg: mix(pal.background, pal.colors.selection, 0.6), ...(panelBg ? { bg: panelBg } : {}), bands: shimmerBands(hexPal), ...(grid ? { grid } : {}) } satisfies RowsProps, width, height: listHeight }))
     } else shown.forEach((l, i) => body.push(line(`detail:${off + i}`, l)))
   } else {
     if (panel.detail !== null) closeDetail(panel)
     const summary = panel.tab === 'instructions' && rows.length > 0 ? 1 : 0
-    const win = listWindow(panel, rows, listHeight - summary)
+    // Tree and Touched name their columns and total them above the list (the column header and totals rows).
+    const bgitNow = branchGit(view)
+    const gc = bgitNow ? gitCounts(bgitNow) : null
+    const listHead: ListHead | null =
+      els.Client && panel.tab !== 'instructions'
+        ? {
+          label: panel.tab === 'tree' ? `All files · ${counts.touched} touched` : `${counts.touched} ${counts.touched === 1 ? 'file' : 'files'}`,
+          git: gc ? { added: gc.added, removed: gc.removed } : null,
+          value: view.value === 'tokens' ? fmtEstTokens(totals(vs).contextTokens).replace(/ tok$/, '') : null,
+        }
+        : null
+    const headRows = listHead ? 2 : 0
+    const win = listWindow(panel, rows, listHeight - summary - headRows)
     view.list = { total: rows.length, height: win.height }
+    let glyphTop = 0
+    let glyphs: (Vector | null)[] = []
     for (const r of win.rows) onScreen.push(...(r.glyph ? [r.glyph.text] : []), ...r.meta.map((m) => m.text))
     const selected = panel.selected[panel.tab]
     const empty = rows.length > 0 ? null : panel.query ? `no paths match “${panel.query}”` : panel.tab === 'tree' ? `no files found under ${panel.focus ?? root}` : 'nothing yet: files show here as Claude touches them'
@@ -1365,23 +1430,31 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
       const lines: RowLine[] = []
       if (summary) lines.push(plain(instructionSummaryLine(viewState(view)), pal.colors.instruction))
       {
-        // The anatomy, laid out over the visible window so the git and value columns line up.
+        // The anatomy, laid out over the visible window so the git and value columns line up; the column names
+        // and the totals row above it take the same columns.
         const look: Look = { glyphs: view.glyphs.set, value: view.value, now, info: (p) => view.info.get(p), iconColor: view.iconColor, coverage: view.coverage, motion: view.motion, ...agentLook(view) }
-        lines.push(...windowLines(win.rows, width, pal, look, selected ?? undefined))
+        const laid = listLines(win.rows, width, pal, look, selected ?? undefined, { ...(listHead ? { head: listHead } : {}), vectors: vectorGlyphs })
+        lines.push(...laid.head)
+        glyphTop = lines.length
+        glyphs = laid.glyphs
+        lines.push(...laid.rows)
       }
       if (win.hidden > 0) lines.push(plain(moreNote(win), pal.colors.muted))
       if (empty) lines.push(plain(empty, pal.colors.muted))
-      while (lines.length < listHeight) lines.push({ id: '', segs: [{ t: ' '.repeat(width) }] })
+      while (lines.length < listHeight) lines.push({ id: '', segs: [{ t: ' '.repeat(width), w: width }] })
       byClient = true
-      body.push(
-        els.Client({
-          key: 'rows',
-          module: './rows.ts',
-          props: { lines: lines.slice(0, listHeight), hoverBg: mix(pal.background, pal.colors.selection, 0.6), ...(panelBg ? { bg: panelBg } : {}), bands: shimmerBands(hexPal) } satisfies RowsProps,
-          width,
-          height: listHeight,
-        }),
-      )
+      const client = els.Client({
+        key: 'rows',
+        module: './rows.ts',
+        props: { lines: lines.slice(0, listHeight), hoverBg: mix(pal.background, pal.colors.selection, 0.6), ...(panelBg ? { bg: panelBg } : {}), bands: shimmerBands(hexPal), ...(grid ? { grid } : {}) } satisfies RowsProps,
+        width,
+        height: listHeight,
+      })
+      // Desktop: the gutter glyphs as vectors over the list's blank gutter cells, one size for every state.
+      const overlay = els.Svg && glyphs.some((g) => g !== null)
+        ? glyphs.flatMap((g, i) => (g && els.Svg && glyphTop + i < listHeight ? [Box({ position: 'absolute', top: glyphTop + i, left: 0, width: 2, height: 1, alignItems: 'center', justifyContent: 'center', children: [els.Svg({ source: g.source, alt: g.alt, width: GLYPH_PX, height: GLYPH_PX })] })] : []))
+        : []
+      body.push(overlay.length > 0 ? Box({ key: 'list', flexDirection: 'column', height: listHeight, children: [client, ...overlay] }) : client)
     } else {
       // Surfaces without Client (vscode): one Button per row.
       if (summary) body.push(line('summary', fitRow([{ text: instructionSummaryLine(viewState(view)), fg: pal.colors.instruction }], [], width)))
@@ -1402,16 +1475,50 @@ async function drawPane($: $, view: View, e: RenderInput<'Pane'>) {
     overflow: 'hidden',
     children: [...press].map(([key, onPress]) => Button({ key: `key:${key}`, plain: true, hotkey: key, children: [Text({ children: [key] })], onPress })),
   })
-  const footer: RenderElement[] = [
+  const FOOT = 'ccfiles:footer'
+  const side = (key: string, l: readonly Piece[], r: readonly Piece[], extra: RenderElement[] = []) =>
     Box({
-      key: 'footer',
+      key,
       flexDirection: 'row',
       height: 1,
       ...(panelBg ? { backgroundColor: panelBg } : {}),
+      children: [Box({ flexGrow: 1, flexShrink: 1, overflow: 'hidden', flexDirection: 'row', children: pieces(l) }), ...(r.length ? [ctext(' ', pal.colors.muted), ...pieces(r)] : []), ...extra],
+    })
+  const shareBar = (() => {
+    if (foot.share === null) return null
+    const label = ` ${foot.shareLabel}`
+    if (vectorGlyphs && els.Svg) {
+      const v = svgBar([{ share: foot.share, color: pal.colors.read }], mix(pal.background, pal.colors.selection, 0.6))
+      return Box({ key: 'foot:share', flexDirection: 'row', height: 1, alignItems: 'center', children: [Box({ flexGrow: 1, height: 1, justifyContent: 'center', flexDirection: 'column', children: [els.Svg({ source: v.source, alt: `${foot.shareLabel} came from files`, height: 6 })] }), ctext(label, pal.colors.muted)] })
+    }
+    const cells = Math.max(4, width - cellWidth(label))
+    const on = Math.round(foot.share * cells)
+    return Box({ key: 'foot:share', flexDirection: 'row', height: 1, children: [ctext('█'.repeat(on), pal.colors.read), ctext('░'.repeat(cells - on), pal.colors.selection), ctext(label, pal.colors.muted)] })
+  })()
+  // Hovering the context line explains its two figures.
+  const explain = Box({
+    position: 'absolute',
+    bottom: footerHeight,
+    left: 0,
+    right: 0,
+    display: 'none',
+    hover: { scope: FOOT, display: 'flex' },
+    flexDirection: 'column',
+    backgroundColor: pal.colors.selection,
+    paddingX: 1,
+    children: [
+      Text({ color: pal.colors.text, wrap: 'wrap', children: ['exact: the size of the last request this agent sent, from the API’s usage report.'] }),
+      Text({ color: pal.colors.text, wrap: 'wrap', children: ['≈ from files: characters ÷ 4 of the file text this agent received; an estimate, and only the part files make up.'] }),
+    ],
+  })
+  const footer: RenderElement[] = [
+    Box({
+      key: 'footer',
+      flexDirection: 'column',
       children: [
-        Box({ flexGrow: 1, flexShrink: 1, overflow: 'hidden', flexDirection: 'row', children: pieces(foot.left) }),
-        ...(foot.right.length ? [ctext(' ', pal.colors.muted), ...pieces(foot.right)] : []),
-        hidden,
+        Box({ flexDirection: 'column', hover: { scope: FOOT }, children: [side('foot:top', foot.top.left, foot.top.right), ...(shareBar ? [shareBar] : [])] }),
+        side('foot:keys', foot.bottom.left, foot.bottom.right, [hidden]),
+        explain,
       ],
     }),
   ]
@@ -1493,9 +1600,16 @@ function activityChip(view: View, root: string): { full: string; short: string; 
 }
 
 /** The footer's exact context figure (`62k`): the viewpoint agent's latest request, main's by default. */
-function footContext(s: SessionState, viewpoint: string): string | null {
-  const n = viewpoint === ALL || viewpoint === MAIN ? s.latestContext : (s.contextByAgent.get(viewpoint) ?? null)
-  return n === null ? null : fmtExactTokens(n, { short: true }).replace(/^=/, '')
+/** The viewpoint's context size: its latest request's input, exact; main's for main and all. */
+function footContextTokens(s: SessionState, viewpoint: string): number | null {
+  return viewpoint === ALL || viewpoint === MAIN ? s.latestContext : (s.contextByAgent.get(viewpoint) ?? null)
+}
+
+/** The keys the footer lists for a view: the list's, or a detail, help or usage view's. */
+function footerKeys(detail: string | null, subagents: boolean): KeyHint[] {
+  if (detail === null) return [['j k', 'move'], ['d', 'detail'], ...(subagents ? [['a', 'agent'] as const] : []), ['s', 'filter'], [HELP_KEY, 'help']]
+  if (detail === HELP || detail === AGENTS) return [['q', 'back'], ['j k', 'scroll']]
+  return [['q', 'back'], ['y', 'copy path'], ['j k', 'scroll'], [HELP_KEY, 'help']]
 }
 
 /** The fixed line under a list longer than its area: rows out of view, and how many of them are active. */
@@ -1506,12 +1620,15 @@ function moreNote(win: { hidden: number; active: number }): string {
 /**
  * Closing the detail (d, q) gives the keyboard back to the prompt, so the next keystroke goes to the
  * composer. 2.1.295 has no call that releases the keys, and a pane re-opened without `focus` opens without them,
- * so the pane closes and opens again unfocused, its state kept here. Never throws.
+ * so the pane closes and opens again unfocused, its state kept here. That is the terminal's fix only: on desktop a
+ * reopened pane loses the width the person gave it, and the app hands the keyboard back on its own, so the view
+ * just closes. Never throws.
  */
-async function closeDetailToPrompt($: $, view: View): Promise<void> {
+async function closeDetailToPrompt($: $, view: View, surface: string): Promise<void> {
   try {
     closeDetail(view.panel)
     syncSelection(view, currentRows(view, await $.clock.now()))
+    if (surface !== 'terminal') return redraw($, view)
     await $.ui.close({ id: PANE_ID })
     await $.ui.open({ id: PANE_ID, title: PANE_TITLE })
     view.open = true
@@ -1555,7 +1672,7 @@ async function rowsMessage($: $, view: View, data: unknown, surface: string): Pr
       if (path && path.startsWith('/')) await $.ui.copy({ text: path, surface: surface as never }).catch(() => undefined)
     } else if (typeof m.key === 'string' && panel.detail !== null) {
       // Keys while the Client shows the detail view.
-      if (m.key === 'd' || m.key === 'q') return await closeDetailToPrompt($, view)
+      if (m.key === 'd' || m.key === 'q') return await closeDetailToPrompt($, view, surface)
       else if (m.key === HELP_KEY) panel.detail === HELP ? closeDetail(panel) : openHelp(panel)
       else if (m.key === 'j' || m.key === 'down') scroll(panel, 1, 0, 0, false)
       else if (m.key === 'k' || m.key === 'up') scroll(panel, -1, 0, 0, false)

@@ -24,8 +24,9 @@ calls.
 ## Requirements
 
 - Claude Code **2.1.287 or later**, which has mods on by default. Developed and tested on 2.1.295.
-- The **fullscreen** layout (`/tui fullscreen`, or `"tui": "fullscreen"` in `~/.claude/settings.json`).
-- A terminal **at least 110 columns wide**.
+- In a terminal: the **fullscreen** layout (`/tui fullscreen`, or `"tui": "fullscreen"` in
+  `~/.claude/settings.json`) and a terminal **at least 110 columns wide**. Claude Code Desktop needs neither; it
+  places the panel itself.
 - `git` on your `PATH` for the git colours. This is optional.
 - A [Nerd Font](https://www.nerdfonts.com/) for file-type icons. This is optional; without one the panel uses
   plain Unicode.
@@ -49,8 +50,8 @@ git clone https://github.com/jasonaden/ccfiles
 claude --plugin-dir ./ccfiles/mods/ccfiles
 ```
 
-Then run **`/ccfiles`**. The panel docks on the right. It never opens on its own. If the layout isn't fullscreen
-or the terminal is too narrow, it says so and tells you how to fix it.
+Then run **`/ccfiles`**. The panel docks on the right. It never opens on its own. In a terminal, if the layout
+isn't fullscreen or the terminal is too narrow, it says so and tells you how to fix it.
 
 ## The panel
 
@@ -58,27 +59,31 @@ or the terminal is too narrow, it says so and tells you how to fix it.
 
 From top to bottom:
 
-1. **Header.** The project name, or a breadcrumb while a folder is focused, then the buttons:
+1. **Header.** The project name, or a breadcrumb while a folder is focused, then the buttons. Hover one for its
+   name:
 
    | Button | Does |
    |---|---|
    | `?` | help: every key, glyph, badge and meta word |
    | `↑` | focus the parent folder (works above the project root too) |
    | `⌂` | back to the project root |
-   | `↻` | refresh git now |
+   | `↻` | refresh git now (`r`) |
    | `◉` | follow Claude on or off; scrolling by hand pauses it |
    | `Σ` | cycle the right column: ≈ tokens → lines read → modified date → size |
    | `⊟` / `⊞` | collapse every folder / restore the default view |
 
-2. **Branch row** (in a git repo). Shows `main ↑1 ↓2 origin/main` on the left and
-   `+223 −21 · 4 new · 6 mod · 1 del` on the right.
+2. **Branch row** (in a git repo). Shows `main ↑1 ↓2 origin/main` on the left and `4 new · 6 mod · 1 del` on
+   the right.
 3. **Tabs**: **Tree**, **Touched** (every file Claude touched, flat and sortable) and **Instructions** (what
-   Claude Code loaded into context). The search box is at the right end of the tab strip.
+   Claude Code loaded into context). The filter box is at the right end of the tab strip.
 4. **Agents line**, once a subagent has run (see [Subagents](#subagents)).
-5. **The list.**
-6. **Footer.** Shows `context 58k exact · files ≈12k` and what Claude is doing right now (`◌ reading
-   src/db/schema.ts`). `context` is the latest request's exact input size from the API; `files` is the estimated
-   size of the files in context.
+5. **Column names and totals.** `READ`, `NAME`, `GIT` and the right column's name, then `All files · 16
+   touched` with the git `+N −N` and ≈ tokens totals in the same columns as each row's figures.
+6. **The list.**
+7. **Footer.** `main agent  218k in context (exact)` and `≈22k from files`, a bar showing the files' share of
+   the context, then the keys this view takes and what Claude is doing right now (`◌ reading src/db/schema.ts`).
+   The context figure is the agent's latest request's exact input size from the API; the files figure is the
+   estimated size of the files in it. Hover the footer for the same explanation.
 
 The Tree lists only what matters: touched files, git changes, and the folders that hold them. Everything else in a
 folder folds into one row, such as `3 files, 2 folders not read`, which you can click to open.
@@ -94,15 +99,17 @@ you click in the list, arrows and Enter work too.
 | `j` / `k` (or ↑ ↓, PgUp/PgDn, Home/End, the wheel) | move / scroll |
 | `h` / `l` | collapse / expand a folder, section or folded group |
 | Enter or double-click | on a folder or section: focus it, so the Tree shows only that subtree |
-| `d` | detail view of the selected file: exact line ranges, history, why it loaded; `d` or `q` closes it |
-| `s` | search paths; Enter jumps to the first hit |
-| `c` | clear the search |
+| `d` | detail view of the selected file: how much was read, where in the file, history, why it loaded; `d` or `q` closes it |
+| `s` | filter paths as you type; Enter selects the first match |
+| `c` | clear the filter |
 | `g` | help (the `?` button) |
 | `f` | follow Claude on / off |
+| `r` | refresh git now (the `↻` button) |
 | `o` | sort the Touched tab: recent, tokens, least coverage |
 | `y` | copy the selected file's path |
 | `a` | switch viewpoint: main, then each subagent |
-| `u` | per-agent table: files, ≈ tokens and exact usage for each agent |
+| `u` | usage: the session's exact API usage, and files, ≈ tokens and exact usage per agent |
+| `q` | back from a detail, help or usage view |
 | mouse | click a row to open it, right-click to copy its path, drag to scroll |
 
 Closing the detail or help view with `d` or `q` hands the keyboard back to the prompt, so you can type at once.
@@ -165,7 +172,7 @@ it into a list.
   Plan, `C` a custom agent, `+` several kinds, `m` main (seen from a subagent's view).
 - **Viewpoint.** Click an agent, or press `a`, to see the tree as that agent saw it: its meters, ranges,
   re-reads and token figures, and its own context size in the footer.
-- **`u`** shows a per-agent table that adds up to the session total.
+- **`u`** shows the session's exact usage and a per-agent table that adds up to the session total.
 
 ## Outside the project
 
@@ -228,7 +235,7 @@ Inside tmux, Claude Code draws 256 colours unless you start it with `CLAUDE_CODE
 - **Tokens marked `≈` are estimates**: the characters Claude received from a file, divided by 4. They show a
   file's relative weight; they are not exact token counts.
 - **Figures labelled `exact`** come from the per-request usage that Claude Code reports. The footer's `context`
-  is the latest request's input size. The help view also shows `billed ∑`, the sum of every request.
+  is the latest request's input size. The usage view (`u`) also shows `billed ∑`, the sum of every request.
 
 ## Privacy
 

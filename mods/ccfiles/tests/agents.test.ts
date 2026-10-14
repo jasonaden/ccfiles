@@ -11,7 +11,7 @@ import { fileBadge } from '../src/view/agentsline.ts'
 import { defaultPalette } from '../src/palette.ts'
 import { cellWidth } from '../src/view/text.ts'
 import { unmarkedTokenFigures } from '../src/tokens.ts'
-import { agentLines, detailLines, helpView } from '../src/view/detail.ts'
+import { agentLines, detailLines } from '../src/view/detail.ts'
 import { serializeLog } from '../src/log.ts'
 import { BIG, CWD, LOG, SMALL, harness, readResult, startSession, endSession, tools } from './harness.ts'
 import { host, pane, screen } from './panel-kit.ts'
@@ -227,29 +227,31 @@ describe('per-agent ≈ tokens and exact usage add up', () => {
   test('the agents view (u) shows them with ≈ on estimates, = and "exact" on usage, and no unmarked figure', () => {
     const text = agentLines(replay(records)).map((l) => l.map((c) => c.text).join(''))
     const joined = text.join('\n')
-    expect(joined).toMatch(/main .*≈500 tok.*=47k/)
-    expect(joined).toMatch(/Explore#1 .*≈3k tok.*=9k/)
-    expect(joined).toMatch(/total .*≈3\.9k tok/)
+    expect(joined).toMatch(/AGENT +FILES +≈READ +=BILLED +=OUT/)
+    expect(joined).toMatch(/main +2 +≈500 +=47k/)
+    expect(joined).toMatch(/Explore#1 +1 +≈3k +=9k/)
+    expect(joined).toMatch(/total +≈3\.9k +=61k/)
+    // The session's exact usage leads the view.
+    expect(joined).toMatch(/billed +∑ 61,008 tok \(exact\) incl\. cache re-reads/)
     expect(joined).toContain('exact')
     expect(joined).toContain('tool.call agentId')
     expect(unmarkedTokenFigures(joined)).toEqual([])
   })
 
-  test('main’s footer gives main’s figures; each agent’s own ≈ and = figures are in the help view', async ($, on) => {
+  test('main’s footer gives main’s figures; each agent’s own ≈ and = figures are in the usage view (u)', async ($, on) => {
     const h = harness(on)
     host(on)
     // A log a previous process wrote.
     h.put(LOG, serializeLog(records))
     await startSession($, 'resume')
-    const ui = await $.ui.mount(pane(100, 16))
-    // The footer is one line, `context Nk exact · files ≈N` for the viewpoint (main here);
-    // the per-agent ≈ and = figures are in the help view's usage table.
-    expect((await screen(ui)).at(-1)!).toMatch(/^context 24k exact · files ≈500\b/)
-    await ui.press({ key: 'key:g' })
-    expect((await screen(ui)).some((l) => l.startsWith('help '))).toBe(true)
-    // The help view (scrolled further down) holds the usage table.
-    const help = helpView(replay(records)).map((l) => l.map((c) => c.text).join('')).join('\n')
-    expect(help).toMatch(/Explore#1 .*≈3k tok.*=9k/)
+    const ui = await $.ui.mount(pane(100, 30))
+    // The footer leads with `main agent  Nk in context (exact)  ≈N from files` for the viewpoint (main here);
+    // the per-agent ≈ and = figures are in the usage view.
+    expect((await screen(ui)).at(-3)!).toMatch(/^main agent  24k in context \(exact\) +≈500 from files$/)
+    await ui.press({ key: 'key:u' })
+    const usage = (await screen(ui)).join('\n')
+    expect(usage).toMatch(/^Usage/m)
+    expect(usage).toMatch(/Explore#1 +1 +≈3k +=9k/)
   })
 })
 

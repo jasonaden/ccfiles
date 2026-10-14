@@ -24,6 +24,9 @@ function ctx(records: LogRecord[], extra: Partial<ViewContext> = {}): ViewContex
 const ui = { expanded: new Set<string>(), query: '', sort: 'recent' as const }
 const meta = (r: Row | undefined) => (r?.meta ?? []).map((m) => m.text)
 
+/** A literal string as a pattern. */
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 describe('meta wording', () => {
   const files = [
     gitFile('untracked.ts', '?'),
@@ -125,22 +128,21 @@ describe('glyphs and legend', () => {
   })
   test('the help view lists every glyph of the table with its meaning, and every meta word', () => {
     const text = helpLines().map((l) => l.map((c) => c.text).join('')).join('\n')
-    for (const g of GLYPH_TABLE) expect(text).toContain(`${g.glyph}  ${g.meaning}`)
+    for (const g of GLYPH_TABLE) expect(text).toMatch(new RegExp(`${esc(g.glyph)} {2,}${esc(g.meaning)}`))
     for (const m of META_WORDS) expect(text).toContain(m.text)
     expect(text).toContain('?')
   })
   test('the help view lists every key, `g` (help) included; no `?` key', () => {
     const help = helpLines().map((l) => l.map((c) => c.text).join(''))
-    for (const k of KEY_TABLE) expect(help).toContain(`${k.keys}  ${k.meaning}`)
+    for (const k of KEY_TABLE) expect(help.some((l) => new RegExp(`^${esc(k.keys)} {2,}${esc(k.meaning)}$`).test(l))).toBe(true)
     expect(KEY_TABLE.find((k) => k.keys === 'g')?.meaning).toMatch(/help/)
     expect(KEY_TABLE.some((k) => k.keys.split(/[ /]+/).includes('?'))).toBe(false)
   })
-  test('the detail view ends with the same key', () => {
+  test('the detail view keeps to the file: no key or glyph table (that is the help view’s)', () => {
     const f = replay([ev({ kind: 'read', path: `${ROOT}/a.ts`, ranges: [[1, 74]], totalLines: 210 })]).files.get(`${ROOT}/a.ts`)!
     const detail = detailLines(f, { root: ROOT, home: null, git: null, themeHint: null }).map((l) => l.map((c) => c.text).join(''))
-    const help = helpLines().map((l) => l.map((c) => c.text).join(''))
-    expect(detail.slice(-help.length)).toEqual(help)
     expect(detail.join('\n')).toContain('74/210 lines read')
+    expect(detail.join('\n')).not.toMatch(/^KEYS|^GLYPHS/m)
   })
 })
 
@@ -163,10 +165,10 @@ describe('no drawn legend line; the help view is the legend', () => {
         expect(l).not.toMatch(/● read|◐ part/)
       }
       await ui.press({ key: 'key:g' })
-      expect((await screen(ui)).some((l) => /^help\b/.test(l))).toBe(true)
+      expect((await screen(ui)).some((l) => /^Help\b/.test(l))).toBe(true)
       for (const l of await screen(ui)) expect(l).not.toMatch(/(^| )[a-z0-9]: /)
       await ui.press({ key: 'key:d' })
-      expect((await screen(ui)).some((l) => /^help\b/.test(l))).toBe(false)
+      expect((await screen(ui)).some((l) => /^Help\b/.test(l))).toBe(false)
       await ui.unmount()
     }
   })

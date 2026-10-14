@@ -7,7 +7,8 @@ import { isClaudeCodeLoad, type Chip, type Lit, type Row } from './rows.ts'
 import { basename } from '../paths.ts'
 import type { Band, RowLine, Seg } from '../../hooks/rows.ts'
 import { cellWidth, fillColumns, fitRow, splitAt, wrapSegments, type Segment } from './text.ts'
-import { layoutWindow, type RowParts } from './anatomy.ts'
+import { layoutWindow, type Part, type RowParts } from './anatomy.ts'
+import { glyphVector, type Vector } from './svg.ts'
 import * as icons from './icons.ts'
 import { GLYPHS } from './glyphs.ts'
 import type { GlyphSet } from './icons.ts'
@@ -55,9 +56,9 @@ function rowFill(row: Row, p: Palette): string {
   return (row.dim ? dimFillBackground : fillBackground)(p, row.fillTone ?? 'read')
 }
 
-/** Segments as the rows Client draws them (hooks/rows.ts). */
+/** Segments as the rows Client draws them (hooks/rows.ts), each with its width in cells for the grid. */
 export function clientSegs(segs: readonly Segment[]): Seg[] {
-  return segs.map((s) => ({ t: s.text, ...(s.fg ? { c: s.fg } : {}), ...(s.bg ? { bg: s.bg } : {}), ...(s.bold ? { b: true } : {}), ...(s.underline ? { u: true } : {}), ...(s.strike ? { s: true } : {}) }))
+  return segs.map((s) => ({ t: s.text, w: cellWidth(s.text), ...(s.fg ? { c: s.fg } : {}), ...(s.bg ? { bg: s.bg } : {}), ...(s.bold ? { b: true } : {}), ...(s.underline ? { u: true } : {}), ...(s.strike ? { s: true } : {}), ...(s.right ? { r: true } : {}), ...(s.name ? { n: true } : {}), ...(s.filler ? { f: true } : {}) }))
 }
 
 /**
@@ -104,9 +105,14 @@ export function shimmerBands(p: Palette): Record<Lit, Band[]> {
   return bands
 }
 
-/** A detail line, wrapped to the width (one or more screen lines). */
+/** A detail line, wrapped to the width (one or more screen lines); a table row's wrap hangs under its second column. */
 export function lineSegments(line: DetailLine, width: number, p: Palette): Segment[][] {
-  return line.length === 0 ? [fitRow([], [], width)] : wrapSegments(chips(p, line, ''), width)
+  if (line.length === 0) return [fitRow([], [], width)]
+  const head = line[0]!
+  const indent = cellWidth(head.text)
+  // A first column wider than half the pane leaves too little room to hang under: wrap to the edge instead.
+  if (!head.hang || indent * 2 > width) return wrapSegments(chips(p, line, ''), width)
+  return wrapSegments(chips(p, line.slice(1), ''), width - indent).map((l, i) => [i === 0 ? { text: head.text, fg: color(p, head.color) } : { text: ' '.repeat(indent) }, ...l])
 }
 
 
@@ -230,13 +236,52 @@ export function rowParts(row: Row, p: Palette, look: Look, selected: boolean): R
  * selection's background, the read fill (when coverage is drawn as a fill), readable text on both, and the name shimmer.
  */
 export function windowLines(rows: readonly Row[], width: number, p: Palette, look: Look, selectedKey: string | undefined): RowLine[] {
+  return listLines(rows, width, p, look, selectedKey).rows
+}
+
+/** What sits above the rows on the same columns: the column names and the totals row. */
+export type ListHead = {
+  /** The totals row's label (`All files · 16 touched`); null = no totals row. */
+  readonly label: string | null
+  /** Git lines added and removed over every changed file. */
+  readonly git: { readonly added: number; readonly removed: number } | null
+  /** The right column's total, already formatted (`≈22k`). */
+  readonly value: string | null
+}
+
+/** The right column's name in each form. */
+const VALUE_HEADING: Record<Look['value'], string> = { tokens: '≈TOKENS', lines: 'LINES', date: 'MODIFIED', size: 'SIZE' }
+
+/**
+ * The list as rows Client lines, with the column header and totals rows on the same columns when `head` is given.
+ * `vectors`: the gutter glyphs are drawn as vectors over the list (desktop), so their cells stay blank here and
+ * `glyphs` holds each row's drawing.
+ */
+export function listLines(
+  rows: readonly Row[],
+  width: number,
+  p: Palette,
+  look: Look,
+  selectedKey: string | undefined,
+  o: { head?: ListHead; vectors?: boolean } = {},
+): { head: RowLine[]; rows: RowLine[]; glyphs: (Vector | null)[] } {
   const still = look.motion === 'off'
   const parts = rows.map((r) => {
     const x = rowParts(r, p, look, r.key === selectedKey)
     return still && r.shimmer ? { ...x, name: { ...x.name, fg: color(p, r.shimmer), bold: true } } : x
   })
-  const laid = layoutWindow(parts, width)
-  return rows.map((row, i) => {
+  const heads = o.head ? headParts(o.head, p, look, parts.some((x) => x.git.length > 0)) : []
+  const all = layoutWindow(parts, width, heads, o.vectors ? { headRoom: 1.3, fluid: true } : {})
+  const head = all.slice(0, heads.length).map((segs) => ({ id: '', segs: clientSegs(segs) }))
+  const laid = all.slice(heads.length)
+  const glyphs = parts.map((x, i) => {
+    if (!o.vectors || !x.gutter) return null
+    const v = glyphVector(x.gutter.text, x.gutter.fg ?? p.colors.read, rows[i]!.coverage)
+    // The vector takes the glyph's cells; the text there goes blank.
+    if (v) laid[i] = laid[i]!.map((s, k) => (k === 0 ? { ...s, text: ' '.repeat(cellWidth(s.text)) } : s))
+    return v
+  })
+  const lines = rows.map((row, i) => {
     const segs = laid[i]!
     const rowBg = row.key === selectedKey ? p.colors.selection : undefined
     const fill = look.coverage === 'fill' ? fillColumns(row.coverage, width) : 0
@@ -253,6 +298,19 @@ export function windowLines(rows: readonly Row[], width: number, p: Palette, loo
     }
     return { id: row.key, segs: clientSegs(readable), ...(row.shimmer && at && !still ? { sh: row.shimmer, at, ph: phaseOf(row.key) } : {}) }
   })
+  return { head, rows: lines, glyphs }
+}
+
+/** The column header and the totals row as anatomy parts. The git heading shows when any row or the totals has git. */
+function headParts(h: ListHead, p: Palette, look: Look, rowsHaveGit: boolean): RowParts[] {
+  const muted = color(p, 'muted')
+  const git: Part[] = h.git && h.git.added + h.git.removed > 0 ? [{ text: `+${h.git.added}`, fg: color(p, 'added') }, { text: `−${h.git.removed}`, fg: color(p, 'removed') }] : []
+  const blank = { gutter: null, badge: null, depth: 0, caret: null, icon: null, marks: [] } as const
+  const out: RowParts[] = [
+    { ...blank, lead: { text: 'READ', fg: muted }, name: { text: 'NAME', fg: muted }, git: rowsHaveGit || git.length > 0 ? [{ text: 'GIT', fg: muted }] : [], value: { text: VALUE_HEADING[look.value], fg: muted } },
+  ]
+  if (h.label !== null) out.push({ ...blank, name: { text: h.label, fg: muted }, git, value: h.value ? { text: h.value, fg: color(p, 'text'), bold: true } : null })
+  return out
 }
 
 /** A colour that recedes on purpose (`muted`, `git.ignored`): held to 3:1, not 4.5:1, off the selection. */

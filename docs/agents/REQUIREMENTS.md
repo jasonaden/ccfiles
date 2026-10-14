@@ -46,9 +46,10 @@ Terms used below:
 
 - **PANEL-1** `/ccfiles` (registered at `session.start`, immediate) opens a docked pane with id `ccfiles` and
   title `Files`, with focus. The panel never opens on its own.
-- **PANEL-2** Outside the fullscreen layout `/ccfiles` refuses with: "ccfiles needs the fullscreen layout to
-  dock beside the transcript. Run /tui fullscreen, then /ccfiles." Under 110 terminal columns it refuses with the
-  width and "Widen it to ≥110 columns, then run /ccfiles."
+- **PANEL-2** In a session that draws on a terminal, outside the fullscreen layout `/ccfiles` refuses with:
+  "ccfiles needs the fullscreen layout to dock beside the transcript. Run /tui fullscreen, then /ccfiles." Under
+  110 terminal columns it refuses with the width and "Widen it to ≥110 columns, then run /ccfiles." A session with
+  no terminal surface (Claude Code Desktop) skips both checks and leaves placement to the app.
 - **PANEL-3** When placed it answers `panel open: 1 Tree · 2 Touched · 3 Instructions (keys: …)`; when not
   placed, `panel not placed (<reason>)`.
 - **PANEL-4** Recording runs whether or not the panel is open. Redraws, the project walk and outside-repo git runs
@@ -56,48 +57,73 @@ Terms used below:
 
 ## Layout
 
-From top to bottom: header row, branch row, tab strip, agents line, list, footer.
+From top to bottom: header row, branch row, tab strip, agents line, the column header and totals rows, list,
+footer.
 
 - **LAYOUT-1 Header row.** Left: the breadcrumb, bold in `accent`: the session root's name, or the focused path
   (`project ▸ packages ▸ retrieval`, ROOT section). It fits the width minus 22 cells by turning middle segments
-  into `…`, keeping the last. Right: seven one-glyph buttons with a hover background, never `x: label` text:
+  into `…`, keeping the last. Right: seven one-glyph buttons, never `x: label` text. Each button is its own hover
+  group (`hover.scope`), so only the one under the pointer lights, and hovering it reveals its name in a box just
+  below it (`Refresh git now (r)`); the mod API has no tooltip prop:
 
   | Button | Does |
   |---|---|
   | `?` | open or close the help view (dim unless help is open); click only, the key is `g` |
   | `↑` | focus the parent folder, above the session root too |
   | `⌂` | back to the session root (dim when not focused) |
-  | `↻` | refresh git now (GIT-2 throttle applies) |
+  | `↻` | refresh git now (GIT-2 throttle applies); the key is `r` |
   | `◉` | follow on/off: bright while following, dim while paused |
   | `Σ` | cycle the right column: tokens → lines → date → size |
   | `⊟` / `⊞` | collapse every folder / back to the default view (TREE-8) |
 
 - **LAYOUT-2 Branch row**, only when the shown repo is a git repo (GIT-6 picks the repo). Left:
   `⎇  main ↑4 ↓1 origin/main` (ahead in `search`, behind in `git.M`, upstream muted; `detached` with no branch).
-  Right: `+223 −21 · 4 new · 6 mod · 1 del · 2 ren`, or `clean`. Narrow: the upstream drops first, then the
+  Right: `+223 −21 · 4 new · 6 mod · 1 del · 2 ren`, or `clean`. While Tree or Touched shows its totals row
+  (LAYOUT-5) the `+N −N` moves there, under the rows' own git column. Narrow: the upstream drops first, then the
   per-state counts, then `+N −N`; the branch and ahead/behind stay.
-- **LAYOUT-3 Tab strip.** `Tree`, `Touched N`, `Instructions N`, each padded one cell each side, then the search
-  field at the right end. The active tab has the `selection` background, bold underlined `accent` label; inactive
-  tabs use `text`. Touched counts files with an action, an instruction load or another agent's share; Instructions
-  counts instruction files. Both exclude skill-description rows and follow the viewpoint. Narrow: the search
-  placeholder shrinks to `/`, then `Instructions` becomes `Instr`.
+- **LAYOUT-3 Tab strip.** `Tree`, `Touched N`, `Instructions N`, each padded one cell each side, then the filter
+  field at the right end (placeholder `filter files (s)`, or `filter: <query>` while one is set). On the terminal
+  the active tab is reverse video: `accent` background, the panel background as bold text; inactive tabs are
+  `muted`. On desktop the tabs are a segmented control: a track behind them and a `selection` fill behind the active
+  one (Box backgrounds; a Svg stretched to a Box it cannot measure draws at its default 300×150). An open detail,
+  help or usage view is a tab of its own at the end, active, named `Help`, `Usage` or the file's name (cut in the
+  middle to fit) with a `×` that closes it; it takes the filter field's place, and no list tab is active then. Touched counts files with an action, an instruction load or another agent's share; Instructions
+  counts instruction files. Both exclude skill-description rows and follow the viewpoint. Narrow: the placeholder
+  shrinks to `s`, then `Instructions` becomes `Instr`.
 - **LAYOUT-4 Agents line**, once a subagent exists (AGENT section).
-- **LAYOUT-5 List.** Tree is the default tab. A list longer than its area gives its last line to one fixed note,
+- **LAYOUT-5 Column header and totals.** Above the Tree and Touched lists, on the rows' own columns: a header row
+  (`READ`, `NAME`, `GIT` when any row or the totals has git, and the right column's name: `≈TOKENS`, `LINES`,
+  `MODIFIED` or `SIZE`), then a totals row (`All files · N touched` on Tree, `N files` on Touched) with the git
+  `+N −N` over every changed file and, in tokens form, the viewpoint's ≈ files total in bold. Both stay fixed
+  while the list scrolls; the column widths widen to fit their labels.
+- **LAYOUT-6 List.** Tree is the default tab. A list longer than its area gives its last line to one fixed note,
   `⋮ N more`, plus `· M active` when lit or in-flight rows are out of view, so the list never jumps. Empty
   states: `no paths match "<query>"`, `no files found under <dir>` (Tree), `nothing yet: files show here as Claude
   touches them`.
-- **LAYOUT-6 Footer**, one line. Left: `context 58k` (bold `accent`) ` exact` · `files ≈12k`. Right: the activity
-  chip: `◌ [<agent> ]reading|editing|committing <path>` while a call runs (newest), else `✓ committed <sha7>`
-  for the session's latest commit. `context` is input + cache read + cache creation of the latest main request,
-  absent until the first request. `files` is the ≈ tokens of files in the main context now (TOK-7). In a subagent
-  viewpoint `context` is that agent's latest request and `files` is ≈0 (subagent context is not tracked per
-  file). Narrow: the chip shortens (`◌ a.ts`, `✓ a1c9e42`), then `files` drops, then the chip; `context` never
-  drops.
+- **LAYOUT-7 Footer**, three lines (two before the first request).
+  - Line 1: whose context (`main agent`, bold `accent`; in a subagent viewpoint that agent's label), its size in
+    bold with ` in context (exact)`, and on the right `≈12k from files`. Before the first request: `no request
+    yet`. The context is input + cache read + cache creation of that agent's latest request; the files figure is
+    the ≈ tokens of files in the main context now (TOK-7), ≈0 in a subagent viewpoint (subagent context is not
+    tracked per file). Narrow: the wording shortens (`exact`, `files`), then `who` and the files figure drop; the
+    context figure never drops.
+  - Line 2: the files' share of the context as a bar and `N% of context`: `█`/`░` cells on the terminal, a
+    stretched Svg bar on desktop. Absent before the first request.
+  - Line 3: the keys this view takes, `j k move · d detail · s filter · g help` (`a agent` once a subagent ran) on
+    the list, `q back · y copy path · j k scroll · g help` in a detail, `q back · j k scroll` in help and usage;
+    right, the activity chip: `◌ [<agent> ]reading|editing|committing <path>` while a call runs (newest), else
+    `✓ committed <sha7>`. Narrow: keys drop from the end, the chip shortens (`◌ a.ts`, `✓ a1c9e42`), then drops.
+  - Hovering lines 1–2 reveals a box above them saying what `exact` and `≈ from files` mean.
 
 ## Rows
 
 - **ROW-1 One line, exact width.** Every row is one terminal line exactly the pane width, at every width and
   during activity. Long names end in `…`.
+- **ROW-1a Desktop grid.** Desktop (and VS Code) draw Text in a proportional font but count a Box's width in
+  cells, so there each laid-out run sits in a Box of its own cells: columns padded for the terminal still line up.
+  A name's Box takes its text's own width and the padding after it stretches, so a proportional name is never cut
+  at its cell count. Git and value runs are right-aligned in their cells. Bars of block characters draw as filled
+  cells. The gutter glyphs are Svg drawn over the gutter's blank cells, one size for every state.
 - **ROW-2 Anatomy.** Left to right: state cell, space, badge cell, space, 3 cells per depth level, caret slot
   (`▸`/`▾` and a space; blank on files), icon slot (icon and two spaces), name, marks, then a git column and a
   value column. The git and value columns have one width across the visible window and are right-aligned, with
@@ -119,7 +145,8 @@ From top to bottom: header row, branch row, tab strip, agents line, list, footer
   unverified detection, `⚡` for an instruction file loaded without a tool read (Claude Code loads, and a SKILL.md
   loaded through the Skill tool); the Instructions tab draws no `⚡` marks.
 - **ROW-8 Git column.** Files: `+N −N`, then `new` (untracked or added), `del`, `ren`, or `mod` (modified with no
-  line counts). Ignored files show nothing. A collapsed folder sums its changes: `+N −N`, else `N new`, else
+  line counts). `+N −N` splits into two sub-columns, each figure right-aligned in its own, so added figures share
+  one right edge and removed figures another whatever their widths; a word ends at the git column's right edge. Ignored files show nothing. A collapsed folder sums its changes: `+N −N`, else `N new`, else
   `N mod`.
 - **ROW-9 Value column**, cycled by `Σ` in every tab:
 
@@ -251,26 +278,33 @@ with a Nerd Font the meter has 8 steps.
 
 ## Detail, help and agents views
 
-- **VIEW-1 Detail** (`d`, Enter, or a press on a file row) replaces the list and shows: the display path and the
-  absolute path; `lines` ranges / total · % · `R/T lines read` · coverage state; a 10-cell eighth-block mini bar;
-  read and authored ranges when Claude wrote lines; `tokens` (≈, reads, re-reads, already-in-context stubs, search
-  hits); `context` (`⊘ out of context since compaction`, or ≈ in context now when it differs); `written ≈N (not
-  cost) · +N −N`; git letter and counts (`(staged)`); for instruction files the mode (auto-loaded, read via tool,
-  both), origin, load count and reasons, trigger, parent, globs, `capped`, lines received after front matter
-  stripping, resolved path; owner; `⟳ N× after /compact`; the fallback or unverified note; denied and errored
-  counts; `via` agents; a `by agent` table (ranges, coverage, reads, ≈) once a subagent took part; the history,
-  newest first (time, tool or source, reason, range, outcome, ≈, agent); the session's exact usage (latest
-  context, billed ∑ incl. cache re-reads, output); the legend `≈ estimated (chars ÷ 4) · = exact (API usage)`;
-  the theme hint (PAL-4); then the help lines.
-- **VIEW-2 Closing.** `d` or `q` closes the detail and gives the keyboard back to the prompt by closing the pane
-  and opening it again without focus. Tab, selection, scroll and folds are kept.
-- **VIEW-3 Help** (`g` or the `?` button) lists every key and whether it needs a click, the header buttons, the
-  glyph table, the meta words, the gutter, icon and `Σ` columns, where colours come from, `billed ∑ =N exact,
-  incl. cache re-reads (never the context size) · out =N`, and once a subagent ran, the agents table. `g` or `?`
-  again, `d`, `q` or a tab closes it.
-- **VIEW-4 Agents** (`u`, once a subagent ran): one row per agent (main first) with files, ≈ read, `=` billed,
-  `=` out, status (`running`, `done in Ns`), `from <parent>` and its task description; an `other` row for Claude
-  Code's own forks; a total row equal to the session totals; the legend; the attribution path.
+- **VIEW-0 Blocks.** The detail, help and usage views are blocks (`src/view/blocks.ts`): a title, status chips,
+  stat cards, a strip of the lines read, tables with named columns, and term tables (a key or glyph, then what it
+  means). The terminal lays them out as lines on its cell grid; desktop draws them as boxes and text (cards and
+  chips on Box backgrounds, columns sized for proportional text, long lists wrapping) with Svg for the line strip
+  and the glyphs, and scrolls a block at a time. Every stretched Svg is given its height in pixels.
+- **VIEW-1 Detail** (`d`, Enter, or a press on a file row) replaces the list and shows: the file's name and its
+  display path; chips for `✎ edited N times`, git `+N −N uncommitted|staged`, the instruction mode (auto-loaded,
+  read via tool, both) and origin, `also read by <agents>`, `seen by <agents>`, `⊘ out of context since
+  compaction`, `⟳ reloaded N times after /compact`, the fallback or unverified note, denied and errored counts;
+  stat cards `READ` (% and `R/T lines read`), `TOKENS` (≈, or ≈ in context now when it differs) and `ACTIVITY`
+  (reads · edits, re-reads, search hits); a strip of where main's reads, other agents' reads and the lines Claude
+  wrote sit in the file, with the ranges read, `wrote` ranges and a legend; for instruction files a `Loaded by
+  Claude Code` table (loads and reasons, trigger, parent, globs, `capped`, lines received after front matter
+  stripping, resolved path, owner) and `written ≈N (not cost)`; a `By agent` table (agent, lines, reads, ≈) once a
+  subagent took part; the history table, newest first (time, action with its reason and outcome, lines, ≈ tokens,
+  agent); the theme hint (PAL-4). No key or glyph table: that is the help view's.
+- **VIEW-2 Closing.** `d` or `q` closes the detail. On the terminal it gives the keyboard back to the prompt by
+  closing the pane and opening it again without focus; on desktop the view just closes (a reopened pane would lose
+  the width the person gave it). Tab, selection, scroll and folds are kept.
+- **VIEW-3 Help** (`g` or the `?` button) is term tables: `Keys`, `Glyphs` (drawn as vectors on desktop),
+  `Marks and words`, `Header buttons`, `Columns` (gutter, icon, `Σ`, where colours come from), then the estimate
+  legend and which keys need a click. `g` or `?` again, `d`, `q` or a tab closes it.
+- **VIEW-4 Usage** (`u`): `This session, exact API usage` (latest context, billed ∑ incl. cache re-reads and never
+  the context size, output); once a subagent ran, a `By agent` table, one row per agent (main first) with files,
+  ≈ read, `=` billed, `=` out, status (`running`, `done in Ns`), `from <parent>` and its task description, an
+  `other` row for Claude Code's own forks, a total row equal to the session totals, and the attribution path; the
+  legend.
 - **VIEW-5** These views scroll with `j`/`k`/the wheel, and `y` copies the detail's path.
 
 ## Keys and mouse
@@ -286,14 +320,16 @@ with a Nerd Font the meter has 8 steps.
   | `h` `l` | collapse / expand a folder, fold, group or section; `h` on a leaf selects its parent; `l` on a file opens its detail |
   | `d` | detail of the selected file; `d` or `q` closes it |
   | Enter | after a click: focus a folder or section; elsewhere like a press |
-  | `s` | focus the search field |
-  | `c` | clear the search filter |
+  | `s` | focus the filter field |
+  | `c` | clear the filter |
   | `g` | help |
   | `f` | follow on / off |
+  | `r` | refresh git now |
   | `y` | copy the selected file's absolute path |
   | `o` | sort the Touched tab |
   | `a` | viewpoint: main, then each subagent, then main (once a subagent ran) |
-  | `u` | agents view (once a subagent ran) |
+  | `u` | usage view |
+  | `q` | back from a detail, help or usage view |
 
 - **KEY-2 Scroll.** The wheel, arrows, PgUp/PgDn and Home/End on the focused pane scroll the list; a person's
   scroll pauses follow. The list never scrolls past its end.
@@ -303,9 +339,9 @@ with a Nerd Font the meter has 8 steps.
 - **KEY-4 Keyboard ownership.** After any press of the panel's own controls the focus ring moves to a visible
   control (the `?` button) so the next key still reaches the pane. Opening the detail by click hands the keyboard to
   the same button.
-- **KEY-5 Search.** Typing in the search field filters every tab by a case-insensitive substring of the relative
-  path. In Tree every match shows with its folders open. Enter reveals every hit, selects the first, pauses
-  follow, empties the field (the placeholder shows `/ "<query>"`) and gives the keys back to the list.
+- **KEY-5 Filter.** Typing in the filter field filters every tab by a case-insensitive substring of the relative
+  path. In Tree every match shows with its folders open. Enter (`select`) reveals every hit, selects the first,
+  pauses follow, empties the field (the placeholder shows `filter: <query>`) and gives the keys back to the list.
 - **KEY-6 Selection as context.** With `selectionContext: true`, while a file row with an absolute path is
   selected, each submitted prompt gets one context line: `The user has <relative path> selected in the File
   Viewer panel; "this file" or "this" may refer to it.` Off by default.
@@ -382,7 +418,7 @@ with a Nerd Font the meter has 8 steps.
   is split evenly across the files it read.
 - **TOK-3** Edit, Write and NotebookEdit payloads are "written" tokens, shown only in the detail, never in cost.
 - **TOK-4 Formats.** `≈850 tok`, `≈1.2k tok`, `≈12k tok`, `≈1.2M tok`, `≈? tok` when unknown; the right column and
-  footer drop ` tok` but keep `≈`. Exact: `25,283 tok (exact)` in full, `context 25k exact` in the footer,
+  footer drop ` tok` but keep `≈`. Exact: `25,283 tok (exact)` in full, `25k in context (exact)` in the footer,
   `=25k` beside a legend.
 - **TOK-5 Exact usage.** Each `turn.step` usage is kept per agent. Context = input + cache read + cache creation
   of a request. Billed ∑ = that sum over every request, including cache re-reads; it is never called context.

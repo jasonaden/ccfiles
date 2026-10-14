@@ -25,6 +25,8 @@ function textOf(n: unknown): string {
   const node = n as Node
   // The hidden hotkey Buttons sit in a zero-width Box, which draws nothing.
   if (node.type === 'Box' && node.props?.width === 0) return ''
+  // A hover-revealed label (an icon's name) draws nothing until hovered.
+  if (node.type === 'Box' && node.props?.display === 'none') return ''
   const kids = node.children ?? []
   // A plain Button draws its hotkey, a colon, then its label or children.
   const hot = node.type === 'Button' && node.props?.hotkey ? `${node.props.hotkey}: ` : ''
@@ -41,15 +43,18 @@ async function prose(ui: { drawn: () => Promise<unknown> }): Promise<string> {
   return (await screen(ui)).map((l) => l.trimEnd()).join(' ')
 }
 
-/** The drawn pane as lines: one per child of the root column. */
+/** The drawn pane as lines: one per row of the root column (a nested column Box gives one per child). */
 async function screen(ui: { drawn: () => Promise<unknown> }): Promise<string[]> {
   const root = (await ui.drawn()) as Node
   // The list is one Client (hooks/rows.ts): one screen line per line it draws.
-  return (root.children ?? []).flatMap((c) => {
-    const n = c as Node
+  const lines = (n: Node): string[] => {
     if (n.type === 'Client') return ((n.props?.props as { lines?: RowLine[] })?.lines ?? []).map(lineText)
+    // Hidden (hover-revealed) and absolutely placed boxes draw no line of their own.
+    if (n.type === 'Box' && (n.props?.display === 'none' || n.props?.position === 'absolute')) return []
+    if (n.type === 'Box' && n.props?.flexDirection === 'column') return (n.children ?? []).flatMap((c) => lines(c as Node))
     return [textOf(n)]
-  })
+  }
+  return (root.children ?? []).flatMap((c) => lines(c as Node))
 }
 
 /** Follow is paused when the `◉` header button is drawn dim. */
@@ -103,12 +108,13 @@ function host(on: On, theme = 'dark') {
 }
 
 const runFiles = ($: Engine, isFullscreen: boolean, columns: number) =>
-  $.command.run({ command: 'ccfiles', args: '', origin: { kind: 'person' }, presentation: { isFullscreen, columns } } as never)
+  $.command.run({ command: 'ccfiles', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen, columns } } as never)
 
 describe('/ccfiles opens the panel only where it can dock', () => {
   test('refuses outside fullscreen and under 110 columns, with the reason and the fix; opens otherwise', async ($, on) => {
     harness(on)
     const h = host(on)
+    on('session.surfaces', () => ({ value: ['terminal'] as never }))
     const notFull = await runFiles($, false, 160)
     expect(notFull.text).toContain('/tui fullscreen')
     const narrow = await runFiles($, true, 100)
@@ -131,14 +137,14 @@ describe('tabs', () => {
     const ui = await $.ui.mount(pane())
     const tabs = (await screen(ui)).find((l) => /Tree/.test(l))!
     expect(tabs).toMatch(/^ Tree +Touched \d+ +Instructions \d+ /)
-    // The label is its own Text (the pad cells around it are not underlined).
+    // The active tab is in reverse video (accent behind, the panel's background as text); the rest are muted.
     const active = async (label: string) => (await ui.find({ type: 'Text', text: label }))?.props
-    expect(await active('Tree')).toMatchObject({ bold: true, underline: true, color: DARK.colors.accent, backgroundColor: DARK.colors.selection })
-    expect(await active('Touched')).toMatchObject({ color: DARK.colors.text })
+    expect(await active('Tree')).toMatchObject({ bold: true, color: DARK.background, backgroundColor: DARK.colors.accent })
+    expect(await active('Touched')).toMatchObject({ color: DARK.colors.muted })
     expect((await active('Touched'))?.bold).toBeUndefined()
     expect((await ui.find({ key: 'tab:touched' }))?.props?.hotkey).toBeUndefined()
     await ui.press({ key: 'key:3' })
-    expect(await active('Instructions')).toMatchObject({ bold: true, underline: true })
+    expect(await active('Instructions')).toMatchObject({ bold: true, backgroundColor: DARK.colors.accent })
     await ui.press({ key: 'key:2' })
     expect(await active('Touched')).toMatchObject({ bold: true })
     await ui.press({ key: 'tab:tree' })
@@ -172,8 +178,9 @@ describe('rows', () => {
     const ui = await $.ui.mount(pane(71, 30))
     await clickRow(ui, `f:${BIG_PATH}`)
     const detail = (await screen(ui)).join('\n')
-    expect(detail).toContain('1–200 / 1,323 · 15%')
-    expect(detail).toContain('≈ estimated (chars ÷ 4)')
+    expect(detail).toMatch(/^READ +15% +200\/1,323 lines read *$/m)
+    expect(detail).toMatch(/^1–200 *$/m)
+    expect(detail).toMatch(/^TOKENS +≈\S+ +estimate *$/m)
   })
 
   test('the detail view shows read vs authored lines, history, load reason and fallback notes', async ($, on) => {
@@ -189,11 +196,13 @@ describe('rows', () => {
     const ui = await $.ui.mount(pane(71, 30))
     await clickRow(ui, `f:${SMALL_PATH}`)
     const detail = (await screen(ui)).join('\n')
-    expect(detail).toContain('1–7 / 42')
-    expect(detail).toMatch(/read +1–3, 6–7/)
-    expect(detail).toMatch(/authored +4–5/)
-    expect(detail).toMatch(/Read 1–5 ≈\d+ tok main/)
-    expect(detail).toMatch(/Edit edit \+2 −0/)
+    expect(detail).toMatch(/^READ +17% +7\/42 lines read *$/m)
+    // The lines read, then the lines Claude wrote (no read cost), under the strip.
+    expect(detail).toContain('1–3, 6–7 · wrote 4–5')
+    // History is a table: time, action, lines, ≈ tokens, agent.
+    expect(detail).toMatch(/^HISTORY, NEWEST FIRST *\nTIME +ACTION +LINES +≈TOKENS +AGENT/m)
+    expect(detail).toMatch(/Read +1–5 +≈\d+ +main/)
+    expect(detail).toMatch(/Edit +\+2 −0 +main/)
   })
 })
 
@@ -241,13 +250,13 @@ describe('out of context since compaction', () => {
     await ui.press({ key: 'tab:touched' })
     await clickRow(ui, `f:${BIG_PATH}`)
     const big = (await screen(ui)).join('\n')
-    expect(big).toContain('150–200 / 1,323')
+    expect(big).toMatch(/^150–200 *$/m)
     expect(big).toContain('⊘ out of context since compaction')
     await ui.press({ key: 'key:d' })
     await clickRow(ui, `f:${SMALL_PATH}`)
     const small = (await screen(ui)).join('\n')
     expect(small).not.toContain('out of context')
-    expect(small).toMatch(/context +≈\S+ tok in context now/)
+    expect(small).toMatch(/≈\S+ in context now/)
   })
 })
 
@@ -278,7 +287,7 @@ describe('no unmarked token figure anywhere', () => {
       expect(unmarkedTokenFigures(text)).toEqual([])
     }
     // The footer spells out `exact` (`context 48k exact`); rows drop `tok`.
-    expect(seen.join('\n')).toMatch(/context \d+k exact/)
+    expect(seen.join('\n')).toMatch(/\d+k in context \(exact\)/)
     expect(seen.join('\n')).toMatch(/≈\d/)
     // Each view that shows an = figure shows its legend; = never marks an estimate.
     for (const text of seen) {
@@ -288,14 +297,19 @@ describe('no unmarked token figure anywhere', () => {
     await clickRow(ui, `f:${BIG_PATH}`)
     const detail = (await screen(ui)).join('\n')
     expect(unmarkedTokenFigures(detail)).toEqual([])
-    expect(detail).toMatch(/\d tok \(exact\)/)
-    expect(detail).toContain('= exact (API usage)')
+    // The exact figures in full are in the usage view (u).
+    await ui.press({ key: 'key:q' })
+    await ui.press({ key: 'key:u' })
+    const usage = (await screen(ui)).join('\n')
+    expect(unmarkedTokenFigures(usage)).toEqual([])
+    expect(usage).toMatch(/\d tok \(exact\)/)
+    expect(usage).toContain('= exact (API usage')
   })
 })
 
-// One footer line, `context Nk exact · files ≈N`; `billed ∑` is in the help view.
+// The footer: `main agent  Nk in context (exact)  ≈N from files`, the files' share, the keys; `billed ∑` is under u.
 describe('footer', () => {
-  test('the drawn pane ends in one footer line that leads with context; no billed ∑; nothing wraps or cuts at 39–100 columns', async ($, on) => {
+  test('the footer: whose context and its exact size, the files share as a bar, the keys; no billed ∑; nothing wraps or cuts at 39–100 columns', async ($, on) => {
     harness(on)
     host(on)
     on('turn.step', async function* (_$, e) {
@@ -311,12 +325,14 @@ describe('footer', () => {
       const ui = await $.ui.mount(pane(width, 20))
       const lines = (await screen(ui)).map((l) => l.trimEnd())
       expect(lines).toHaveLength(20)
-      const footer = lines.at(-1)!
-      expect(footer).toMatch(/^context 66k exact · files ≈\d/)
-      expect(cellWidth(footer)).toBeLessThanOrEqual(width)
-      expect(footer).not.toContain('…')
+      // Three lines: the context (exact) with the files figure, the files' share of it, the keys.
+      const [top, share, keys] = lines.slice(-3) as [string, string, string]
+      expect(top).toMatch(width >= 60 ? /^main agent  66k in context \(exact\) +≈\S+ from files$/ : /66k (exact|context, exact)/)
+      expect(share).toMatch(/^█*░+ \d+% of context$/)
+      expect(keys).toMatch(/^j k move/)
+      for (const l of [top, share, keys]) expect([l, cellWidth(l) <= width, l.includes('…')]).toEqual([l, true, false])
       expect(lines.join('\n')).not.toContain('billed')
-      expect((await ui.find({ type: 'Text', text: 'context 66k' }))?.props).toMatchObject({ bold: true })
+      expect((await ui.find({ type: 'Text', text: '66k' }))?.props).toMatchObject({ bold: true })
       await ui.unmount()
     }
   })
@@ -620,7 +636,8 @@ describe('rows Client', () => {
     await ui.pointer({ type: 'move', x: 5, y: 2, button: 'left', in: 'rows' } as never)
     await ui.pointer({ type: 'up', x: 5, y: 2, button: 'left', in: 'rows' } as never)
     const after = await clientLines(ui)
-    expect(after[0]!.id).not.toBe(before[0]!.id)
+    // The first row under the column header and totals rows moved.
+    expect(after.find((l) => l.id)!.id).not.toBe(before.find((l) => l.id)!.id)
     // The `◉` button dims; no `follow paused (f)` text.
     expect(await followDimmed(ui)).toBe(true)
     expect((await screen(ui)).join('\n')).not.toContain('follow paused')
@@ -635,7 +652,7 @@ describe('rows Client', () => {
     const ui = await $.ui.mount(pane(60, 12))
     await clickRow(ui, `f:${BIG_PATH}`)
     const detail = (await clientLines(ui)).map(lineText)
-    expect(detail.join('\n')).toContain('1–200 / 1,323')
+    expect(detail.join('\n')).toContain('200/1,323 lines read')
     await ui.key({ key: 'j', in: 'rows' } as never)
     expect((await clientLines(ui)).map(lineText)[0]).toBe(detail[1])
     await ui.key({ key: 'k', in: 'rows' } as never)
@@ -754,21 +771,21 @@ describe('search and keys', () => {
   })
 
   // The search control sits at the tab strip's right end with no `s:` label; its placeholder names the active filter.
-  test('the search control: no key label, `/ search`, the active filter after Enter, cleared by c', async ($, on) => {
+  test('the filter field: no key label, `filter files (s)`, the active filter after Enter, cleared by c', async ($, on) => {
     harness(on)
     host(on)
     await startSession($)
     const ui = await $.ui.mount(pane(60, 16))
     const field = async () => (await ui.find({ key: 'search' }))!.props as { label?: string; placeholder?: string; value?: string }
-    expect(await field()).toMatchObject({ placeholder: '/ search', value: '' })
+    expect(await field()).toMatchObject({ placeholder: 'filter files (s)', value: '' })
     expect((await field()).label).toBeUndefined()
     await ui.input({ key: 'search', text: 'a.t', kind: 'change' })
     expect(await field()).toMatchObject({ value: 'a.t' })
     await ui.input({ key: 'search', text: 'a.t' })
-    expect(await field()).toMatchObject({ value: '', placeholder: '/ “a.t”', submitLabel: 'jump' })
-    expect((await screen(ui)).find((l) => /Tree/.test(l))).toMatch(/\/ “a\.t”$/)
+    expect(await field()).toMatchObject({ value: '', placeholder: 'filter: a.t', submitLabel: 'select' })
+    expect((await screen(ui)).find((l) => /Tree/.test(l))).toMatch(/filter: a\.t$/)
     await ui.press({ key: 'key:c' })
-    expect(await field()).toMatchObject({ placeholder: '/ search' })
+    expect(await field()).toMatchObject({ placeholder: 'filter files (s)' })
   })
 
   test('j/k move, h/l fold and open, y copies the path, d opens the detail', async ($, on) => {
@@ -813,7 +830,7 @@ describe('help key', () => {
   }
   const isHelp = async (ui: { drawn: () => Promise<unknown> }) => {
     const text = (await screen(ui)).join('\n')
-    return text.includes('g  help (this view)') && text.includes('●  read in full')
+    return /^g {2,}help \(this view\)/m.test(text) && /^● {2,}read in full/m.test(text)
   }
 
   // `g` is a hidden hotkey (no `g: help` text is drawn); the help view draws no key row.
@@ -850,7 +867,7 @@ describe('closing the detail hands the keyboard to the prompt', () => {
     await runFiles($, true, 160)
     const ui = await $.ui.mount(pane(60, 16))
     await clickRow(ui, `f:${BIG_PATH}`)
-    expect((await screen(ui)).join('\n')).toContain('1–200 / 1,323')
+    expect((await screen(ui)).join('\n')).toContain('200/1,323 lines read')
     h.opened.length = 0
     return { ui, h }
   }
@@ -914,8 +931,8 @@ describe('closing the detail hands the keyboard to the prompt', () => {
       // From the key row, d opens it; with the rows Client holding the keys, a click on the selected row does.
       if (where === 'key row') await ui.press({ key: 'key:d' })
       else await clickRow(ui, before.selected!)
-      // The detail view is open (no `d: close` key row; its history section shows instead).
-      expect((await screen(ui)).join('\n')).toMatch(/^history/m)
+      // The detail view is open (no `d: close` key row; its READ figure shows instead).
+      expect((await screen(ui)).join('\n')).toMatch(/^READ /m)
       h.opened.length = 0
       if (where === 'key row') await ui.press({ key: `key:${key}` })
       else await ui.key({ key, in: 'rows' } as never)

@@ -23,7 +23,8 @@ export type SortKey = 'recent' | 'tokens' | 'coverage'
 export type Lit = 'read' | 'search' | 'edit' | 'commit' | 'instruction'
 
 /** `tag`: the in-progress tag, the only part of a row that shimmers. */
-export type Chip = { readonly text: string; readonly color: ColorKey; readonly tag?: true }
+/** `hang`: a table's first column; a line that wraps continues under the next chip, not at the left edge. */
+export type Chip = { readonly text: string; readonly color: ColorKey; readonly tag?: true; readonly hang?: true }
 
 export type Row = {
   /** Stable address: `f:<path>`, `d:<dir>`, `u:<dir>` (its untouched fold), `g:<group>`, `s:<skill>`, `p:<plugin>`, `n:<note>`. */

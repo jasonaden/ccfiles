@@ -215,6 +215,8 @@ describe('no painted background in dark', () => {
           expect(props.bg).toBeUndefined()
           const allowed = new Set([
             p.colors.selection,
+            // The active tab, in reverse video.
+            p.colors.accent,
             props.hoverBg,
             ...Object.values(props.bands).flatMap((b) => b.map((x) => x.bg)),
             ...TONES.flatMap((t) => [fillBackground(p, t), dimFillBackground(p, t)]),

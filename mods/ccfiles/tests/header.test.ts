@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 import type { GitSnapshot } from '../src/git.ts'
-import { branchRow, footerLine, tabStrip, tabWidth } from '../src/view/header.ts'
+import { branchRow, footerBlock, tabStrip, tabWidth } from '../src/view/header.ts'
 import { cellWidth } from '../src/view/text.ts'
 
 const txt = (ps: readonly { text: string }[]) => ps.map((p) => p.text).join('')
@@ -61,17 +61,28 @@ describe('tab strip', () => {
   })
 })
 
-describe('one-line footer', () => {
+describe('footer', () => {
   const chip = { full: '✓ committed a1c9e42', short: '✓ a1c9e42', color: 'commit' as const }
-  test('wide: context exact · files ≈ left, chip right', () => {
-    const f = footerLine({ context: '62k', files: '≈11k', chip }, 80)
-    expect(txt(f.left)).toBe('context 62k exact · files ≈11k')
-    expect(txt(f.right)).toBe('✓ committed a1c9e42')
+  const keys = [['j k', 'move'], ['d', 'detail'], ['g', 'help']] as const
+  const f = (w: number, context: number | null = 62_000) => footerBlock({ who: 'main agent', context, files: 11_000, chip, keys }, w)
+  test('wide: whose context and its exact size left, the files estimate right; the share for the bar; keys and the chip', () => {
+    expect(txt(f(80).top.left)).toBe('main agent  62k in context (exact)')
+    expect(txt(f(80).top.right)).toBe('≈11k from files')
+    expect(Math.abs(f(80).share! - 11 / 62)).toBeLessThan(1e-9)
+    expect(f(80).shareLabel).toBe('18% of context')
+    expect(txt(f(80).bottom.left)).toBe('j k move · d detail · g help')
+    expect(txt(f(80).bottom.right)).toBe('✓ committed a1c9e42')
   })
-  test('narrow: the chip shortens, then files drops, then the chip; context never drops', () => {
-    expect(txt(footerLine({ context: '62k', files: '≈11k', chip }, 45).right)).toBe('✓ a1c9e42')
-    expect(txt(footerLine({ context: '62k', files: '≈11k', chip }, 30).left)).toBe('context 62k exact')
-    expect(txt(footerLine({ context: '62k', files: '≈11k', chip }, 20).right)).toBe('')
-    expect(txt(footerLine({ context: '62k', files: '≈11k', chip }, 20).left)).toBe('context 62k exact')
+  test('narrow: the wording shortens, then who and files drop; the context figure never drops; keys drop from the end', () => {
+    expect(txt(f(40).top.left)).toBe('main agent  62k exact')
+    expect(txt(f(24).top.left)).toBe('62k exact')
+    expect(txt(f(12).top.left)).toBe('62k exact')
+    expect(txt(f(30).bottom.left)).toBe('j k move · d detail · g help')
+    expect(txt(f(30).bottom.right)).toBe('')
+    expect(txt(f(16).bottom.left)).toBe('j k move')
+  })
+  test('before any request: no context figure and no share', () => {
+    expect(txt(f(80, null).top.left)).toBe('main agent  no request yet')
+    expect(f(80, null).share).toBeNull()
   })
 })

@@ -123,8 +123,8 @@ export function fileIcon(name: string, set: GlyphSet): Icon {
   return set === 'nerd' ? lookup(name) : { g: PLAIN.file }
 }
 
-const PLAIN_METER = ['○', '◔', '◑', '◕', '●'] as const
-const NERD_METER = [
+export const PLAIN_METER = ['○', '◔', '◑', '◕', '●'] as const
+export const NERD_METER = [
   '\u{F0766}', // nf-md-circle_outline (nothing read)
   '\u{F0A9E}', // nf-md-circle_slice_1
   '\u{F0A9F}', // nf-md-circle_slice_2

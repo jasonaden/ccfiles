@@ -16,6 +16,10 @@ export type Segment = {
   readonly name?: boolean
   /** The in-progress tag: the only cells that shimmer. */
   readonly tag?: boolean
+  /** Right-aligned within its cells where text is not monospace (a value or git column). */
+  readonly right?: boolean
+  /** Padding that only fills to the next column: where text is not monospace it stretches instead of counting cells. */
+  readonly filler?: boolean
 }
 
 /** Cells one code point takes: 0 for combining marks, 2 for wide (CJK, emoji presentation like ⚡), else 1. */

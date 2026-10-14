@@ -4,6 +4,7 @@ import type { GitSnapshot } from '../git.ts'
 import type { ColorKey } from '../palette.ts'
 import type { Tab } from './rows.ts'
 import { cellWidth, truncateMiddle } from './text.ts'
+import { fmtEstTokens, fmtExactTokens } from '../tokens.ts'
 
 export type Piece = { readonly text: string; readonly color: ColorKey; readonly bold?: boolean }
 
@@ -31,13 +32,13 @@ export function gitCounts(git: GitSnapshot): { added: number; removed: number; f
  * the upstream drops first, then the per-state counts, then `+N −N`; `⎇ branch ↑N ↓N` stays. `branchGlyph` is the
  * icon without its trailing space.
  */
-export function branchRow(git: GitSnapshot, w: number, opts: { branchGlyph?: string; upstream?: string | null } = {}): { left: Piece[]; right: Piece[] } {
+export function branchRow(git: GitSnapshot, w: number, opts: { branchGlyph?: string; upstream?: string | null; lines?: boolean } = {}): { left: Piece[]; right: Piece[] } {
   // Two spaces after the icon, as on the rows: a Nerd glyph drawn wide still clears the name.
   const name: Piece[] = [{ text: `${opts.branchGlyph ?? '⎇'}  `, color: 'accent' }, { text: git.branch ?? 'detached', color: 'text', bold: true }]
   const track: Piece[] = [...(git.ahead ? [{ text: ` ↑${git.ahead}`, color: 'search' as const }] : []), ...(git.behind ? [{ text: ` ↓${git.behind}`, color: 'git.M' as const }] : [])]
   const upstream: Piece[] = opts.upstream ? [{ text: ` ${opts.upstream}`, color: 'muted' }] : []
   const c = gitCounts(git)
-  const lines: Piece[] = c.added + c.removed > 0 ? [{ text: `+${c.added}`, color: 'added' }, sp, { text: `−${c.removed}`, color: 'removed' }] : []
+  const lines: Piece[] = opts.lines !== false && c.added + c.removed > 0 ? [{ text: `+${c.added}`, color: 'added' }, sp, { text: `−${c.removed}`, color: 'removed' }] : []
   const states: Piece[][] = [
     c.fresh ? [{ text: `${c.fresh} new`, color: 'git.A' }] : [],
     c.mod ? [{ text: `${c.mod} mod`, color: 'git.M' }] : [],
@@ -80,21 +81,60 @@ export function tabStrip(counts: { touched: number; instructions: number }, w: n
   return { tabs: tabs('Instr'), search: search.glyph }
 }
 
+/** The footer: whose context it is and how big, the share that came from files, and the keys this view takes. */
+export type Footer = {
+  /** Line 1: `main agent  218k in context (exact)` left, `≈22k from files` right. */
+  readonly top: { readonly left: Piece[]; readonly right: Piece[] }
+  /** The files' share of the context (0–1) for the bar under it; null until a request reports a context. */
+  readonly share: number | null
+  /** The bar's label: `10% of context`. */
+  readonly shareLabel: string | null
+  /** Last line: the keys for this view left (`j k move · d detail`), the activity chip right. */
+  readonly bottom: { readonly left: Piece[]; readonly right: Piece[] }
+}
+
+/** One key and what it does, as the footer lists it. */
+export type KeyHint = readonly [keys: string, does: string]
+
 /**
- * The one-line footer: `context Nk exact · files ≈Nk` left, the activity chip right. Narrow: the chip
- * shortens first, then `files` drops, then the chip; the context figure never drops.
+ * The footer for a viewpoint. `context` is exact (the last request's input, from the API's usage report); `files`
+ * is the estimate of the file text in it. Narrow: the wording shortens, then `who` drops, then `files`; the context
+ * figure never drops. Keys drop from the end, the chip shortens and then drops.
  */
-export function footerLine(o: { context: string | null; files: string | null; chip: { full: string; short: string; color: ColorKey } | null }, w: number): { left: Piece[]; right: Piece[] } {
-  const ctx: Piece[] = o.context ? [{ text: `context ${o.context}`, color: 'accent', bold: true }, { text: ' exact', color: 'muted' }] : []
-  const files: Piece[] = o.files ? [{ text: `${ctx.length ? ' · ' : ''}files ${o.files}`, color: 'muted' }] : []
+export function footerBlock(
+  o: { who: string; context: number | null; files: number; chip: { full: string; short: string; color: ColorKey } | null; keys: readonly KeyHint[] },
+  w: number,
+): Footer {
+  const ctx = o.context === null ? null : fmtExactTokens(o.context, { short: true }).replace(/^=/, '')
+  const files = fmtEstTokens(o.files).replace(/ tok$/, '')
+  const who: Piece = { text: o.who, color: 'accent', bold: true }
+  const fig = (t: string): Piece => ({ text: t, color: 'text', bold: true })
+  const m = (t: string): Piece => ({ text: t, color: 'muted' })
+  const tops: { left: Piece[]; right: Piece[] }[] =
+    ctx === null
+      ? [
+        { left: [who, m('  no request yet')], right: [fig(files), m(' from files')] },
+        { left: [who], right: [fig(files), m(' files')] },
+        { left: [], right: [fig(files), m(' files')] },
+      ]
+      : [
+        { left: [who, m('  '), fig(ctx), m(' in context (exact)')], right: [fig(files), m(' from files')] },
+        { left: [who, m('  '), fig(ctx), m(' exact')], right: [fig(files), m(' files')] },
+        { left: [fig(ctx), m(' context, exact')], right: [fig(files), m(' files')] },
+        { left: [fig(ctx), m(' exact')], right: [fig(files)] },
+        { left: [fig(ctx), m(' exact')], right: [] },
+      ]
+  const fits = (t: { left: Piece[]; right: Piece[] }) => width(t.left) + (t.right.length ? 1 + width(t.right) : 0) <= w
+  const top = tops.find(fits) ?? tops[tops.length - 1]!
+  const share = o.context !== null && o.context > 0 ? Math.min(1, o.files / o.context) : null
+  const keyPieces = (ks: readonly KeyHint[]): Piece[] => ks.flatMap(([k, d], i) => [...(i > 0 ? [m(' · ')] : []), { text: k, color: 'text' as const }, m(` ${d}`)])
   const chip = (t: string): Piece[] => (o.chip ? [{ text: t, color: o.chip.color }] : [])
-  const tries = [
-    { left: [...ctx, ...files], right: chip(o.chip?.full ?? '') },
-    { left: [...ctx, ...files], right: chip(o.chip?.short ?? '') },
-    { left: ctx, right: chip(o.chip?.short ?? '') },
-    { left: ctx, right: [] },
-  ]
-  for (const t of tries) if (width(t.left) + (t.right.length ? 1 + width(t.right) : 0) <= w) return t
-  const last = tries[tries.length - 1]!
-  return { left: last.left.length ? [{ ...last.left[0]!, text: truncateMiddle(last.left[0]!.text, w) }] : [], right: [] }
+  let bottom = { left: keyPieces(o.keys), right: chip(o.chip?.full ?? '') }
+  for (let n = o.keys.length; n >= 0; n--) {
+    for (const c of [o.chip?.full ?? '', o.chip?.short ?? '', '']) {
+      bottom = { left: keyPieces(o.keys.slice(0, n)), right: c ? chip(c) : [] }
+      if (fits(bottom)) return { top, share, shareLabel: share === null ? null : `${Math.round(share * 100)}% of context`, bottom }
+    }
+  }
+  return { top, share, shareLabel: share === null ? null : `${Math.round(share * 100)}% of context`, bottom: { left: [], right: [] } }
 }
